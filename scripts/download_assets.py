@@ -42,6 +42,7 @@ def main() -> None:
         "nlphuji/flickr30k",
         split="test",
         cache_dir=str(dataset_cache),
+        trust_remote_code=True,
     )
     split_counts = (
         dict(Counter(dataset["split"])) if "split" in dataset.column_names else {}
