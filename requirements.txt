@@ -1,5 +1,4 @@
 open_clip_torch
-torchvision
 datasets
 pillow
 numpy

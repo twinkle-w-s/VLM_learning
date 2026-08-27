@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local environments and secrets
+.env
+
+# Datasets and generated artifacts
+data/
+checkpoints/
+outputs/
+logs/
+wandb/
+
+# Model weights
+*.pt
+*.pth
+*.ckpt
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
