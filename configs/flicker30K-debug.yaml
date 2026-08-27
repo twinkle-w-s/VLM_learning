@@ -1,0 +1,16 @@
+model_name: ViT-B-32
+pretrained: openai
+
+dataset_name: flickr30k
+data_root: data/flickr30k
+
+batch_size: 4
+num_workers: 2
+image_size: 224
+max_text_length: 77
+
+epochs: 1
+learning_rate: 0.00001
+seed: 42
+
+output_dir: outputs/debug

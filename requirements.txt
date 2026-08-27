@@ -1,0 +1,9 @@
+open_clip_torch
+torchvision
+datasets
+pillow
+numpy
+tqdm
+scikit-learn
+pyyaml
+matplotlib
