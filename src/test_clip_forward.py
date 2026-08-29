@@ -54,8 +54,8 @@ def main():
     model.eval()
 
     with torch.inference_mode():
-        image_features=model.image_encode("pixel_values")
-        text_features=model.text_encode("input_ids")
+        image_features=model.encode_image("pixel_values")
+        text_features=model.encode_text("input_ids")
 
         image_features=image_features/image_features.norm(
             dim=-1,
