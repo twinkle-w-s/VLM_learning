@@ -32,7 +32,7 @@ class Flickr30KDataset(Dataset):
         caption=captions[0]#数据集中对同一个图片有多个不同的描述，这里只用第一个
 
         pixel_values=self.preprocess(image)#prepross是外部传入的数据预处理方法
-        input_ids=self.tokenizer([caption].squeeze(0))
+        input_ids=self.tokenizer([caption]).squeeze(0)
 
         return{
             "pixel_values":pixel_values,

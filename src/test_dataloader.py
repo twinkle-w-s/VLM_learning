@@ -3,9 +3,9 @@ from torch.utils.data import DataLoader
 from flickr30k_datasets import Flickr30KDataset
 
 def main():
-    model_name="VIT-B-32"
+    model_name="ViT-B-32"
 
-    _,_,preprocess=open_clip.create_model_and_transforms(
+    _, _, preprocess=open_clip.create_model_and_transforms(
         model_name,
         pretrained=None,
     )
@@ -37,3 +37,6 @@ def main():
     print("\nCaptions in this batch:")
     for caption in batch["caption"]:
         print("-", caption)
+
+if __name__ == "__main__":
+    main()

@@ -18,8 +18,8 @@ print("字段名称：", dataset.column_names)
 
 sample=dataset[0]
 
-for key,value in sample.items():
-    if isinstance(value,list):
+for key,value in sample.items():#sample.items()表示将字典中的键值对返回
+    if isinstance(value,list):#如果value是list，则打印
         print("列表长度：" ,len(value))
         print("列表前两项：",value[:1])
     else:
