@@ -29,7 +29,7 @@ def main():
     dataloader=DataLoader(
         dataset=dataset,
         batch_size=4,
-        shuffule=False,#这里只做前向传播的验证，不打乱
+        shuffle=False,#这里只做前向传播的验证，不打乱
         num_workers=2,
     )
 
@@ -50,5 +50,33 @@ def main():
     print("image device:", pixel_values.device)
     print("text device:", input_ids.device)
 
+
+    model.eval()
+
+    with torch.inference_mode():
+        image_features=model.image_encode("pixel_values")
+        text_features=model.text_encode("input_ids")
+
+        image_features=image_features/image_features.norm(
+            dim=-1,
+            keepdim=True,
+        )
+        text_features=text_features/text_features.norm(
+            dim=-1,
+            keepdim=True,
+        )#对两个特征都做L2归一化
+
+        logits_per_image=(
+            model.logit._scale.exp()*image_features@text_features.T
+
+        )#model.logit._scale.exp()是放大系数，把相似度放大到更适合交叉熵损失的范围
+    print("image feature shape:", image_features.shape)
+    print("text feature shape:", text_features.shape)
+    print("similarity matrix shape:", logits_per_image.shape)
+    print("similarity matrix:")
+    print(logits_per_image)
+
+    print("diagonal scores:")
+    print(logits_per_image.diag())
 if __name__ == "__main__":
     main()
