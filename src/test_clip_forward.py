@@ -112,6 +112,47 @@ def main():
             print("first parameter gradient norm:", first_parameter.grad.norm().item())
 
 
+
+    #重新计算一遍特征，确保使用的是参数更新后
+    model.eval()
+
+    with torch.inference_mode():
+        image_features_after = model.encode_image(pixel_values)
+        text_features_after = model.encode_text(input_ids)
+
+        image_features_after = image_features_after / image_features_after.norm(
+            dim=-1,
+            keepdim=True,
+        )
+        text_features_after = text_features_after / text_features_after.norm(
+            dim=-1,
+            keepdim=True,
+        )
+
+        logits_after = (
+            model.logit_scale.exp()
+            * image_features_after
+            @ text_features_after.T
+        )
+
+        loss_image_after = torch.nn.functional.cross_entropy(
+            logits_after,
+            labels,
+        )
+        loss_text_after = torch.nn.functional.cross_entropy(
+            logits_after.T,
+            labels,
+        )
+        loss_after = (loss_image_after + loss_text_after) / 2
+
+
+
+
+
+
+
+
+
     print("image feature shape:", image_features.shape)
     print("text feature shape:", text_features.shape)
     print("similarity matrix shape:", logits_per_image.shape)
@@ -126,7 +167,11 @@ def main():
 
     print("loss_image:", loss_image.item())
     print("loss_text:", loss_text.item())
-    print("loss:", loss.item())
+
+    print("loss before update:", loss.item())
+    print("loss after update:", loss_after.item())
+    print("loss change:", loss_after.item() - loss.item())
+    
     print("predicted text index:", predicted_text)
     print("correct text index:", labels)
 
