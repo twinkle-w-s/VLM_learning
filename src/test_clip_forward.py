@@ -70,6 +70,30 @@ def main():
             model.logit._scale.exp()*image_features@text_features.T
 
         )#model.logit._scale.exp()是放大系数，把相似度放大到更适合交叉熵损失的范围
+        print("logits形状：",logits_per_image.shape)
+
+        batch_size=pixel_values.shape[0]
+
+        labels=torch.arange(
+            batch_size,
+            device=device,
+        )#arange表示生成一个数值范围连续的张量
+
+        #计算双向对比损失
+        loss_image=torch.nn.fuctional.cross_entropy(
+            logits_per_image,
+            labels
+        )
+
+        loss_text=torch.nn.fuctional.cross_entropy(
+            logits_per_image.T,
+            labels
+        )
+        loss=(loss_image+loss_text)/2
+
+
+
+
     print("image feature shape:", image_features.shape)
     print("text feature shape:", text_features.shape)
     print("similarity matrix shape:", logits_per_image.shape)
@@ -78,5 +102,16 @@ def main():
 
     print("diagonal scores:")
     print(logits_per_image.diag())
+
+
+    predicted_text = logits_per_image.argmax(dim=1)
+
+    print("loss_image:", loss_image.item())
+    print("loss_text:", loss_text.item())
+    print("loss:", loss.item())
+    print("predicted text index:", predicted_text)
+    print("correct text index:", labels)
+
+
 if __name__ == "__main__":
     main()
