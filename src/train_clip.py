@@ -37,8 +37,7 @@ def compute_clip_loss(model,pixel_values,input_ids):
         model.logit_scale.exp()*image_features@text_features.T
 
     )#model.logit._scale.exp()是放大系数，把相似度放大到更适合交叉熵损失的范围
-    print("logits形状：",logits_per_image.shape)
-
+    
     batch_size=pixel_values.shape[0]
 
     labels=torch.arange(
@@ -107,33 +106,71 @@ def main():
     )
 
     model.train()
-    for batch in train_loader:
-        pixel_values=batch["pixel_values"].to(
-            device,
-            non_blocking=True,#使用固定内存时，让cpu到gpu更快
+
+    num_epochs=config["epochs"]
+
+    for epoch in range(num_epochs):
+        total_loss = 0.0
+        total_correct = 0
+        total_samples = 0
+
+        print(f"starting epoch {epoch + 1}/{num_epochs}")
+
+
+        for step, batch in train_loader:
+            pixel_values=batch["pixel_values"].to(
+                device,
+                non_blocking=True,#使用固定内存时，让cpu到gpu更快
+            )
+
+            input_ids=batch["input_ids"].to(
+                device,
+                non_blocking=True
+            )
+
+            optimizer.zero_grad()#清空上一次的梯度
+
+            loss, logits_per_image=compute_clip_loss(
+                model,
+                pixel_values,
+                input_ids
+            )
+
+            loss.backward()
+            optimizer.step()
+
+            batch_size=pixel_values.shape[0]
+
+            predictions=logits_per_image.argmax(dim=1)
+            labels=torch.arange(
+                batch_size,
+                device=device
+            )
+        
+            total_correct += (predictions == labels).sum().item()#计算Recall@1
+            total_samples += batch_size
+            total_loss += loss.item() * batch_size
+            #打印batch信息
+            if (step + 1) % 100 == 0:
+                current_loss = total_loss / total_samples
+                current_recall = total_correct / total_samples
+
+                print(
+                    f"epoch={epoch + 1}, "
+                    f"step={step + 1}/{len(train_loader)}, "
+                    f"loss={current_loss:.4f}, "
+                    f"recall@1={current_recall:.4f}"
+                )
+                epoch_loss = total_loss / total_samples
+
+        #打印epoch信息        
+        epoch_recall = total_correct / total_samples
+
+        print(
+            f"epoch {epoch + 1} finished: "
+            f"loss={epoch_loss:.4f}, "
+            f"recall@1={epoch_recall:.4f}"
         )
-
-        input_ids=batch["input_ids"].to(
-            device,
-            non_blocking=True
-        )
-
-        optimizer.zero_grad()#清空上一次的梯度
-
-        loss, logits_per_image=compute_clip_loss(
-            model,
-            pixel_values,
-            input_ids
-        )
-
-        loss.backward()
-        optimizer.step()
-
-        print("one-step loss:", loss.item())
-        break
-
-    
-
     
 
 
