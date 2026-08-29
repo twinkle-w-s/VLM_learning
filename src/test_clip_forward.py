@@ -49,11 +49,19 @@ def main():
     print("model device:", next(model.parameters()).device)
     print("image device:", pixel_values.device)
     print("text device:", input_ids.device)
+    #优化器
+    optimizer=torch.optim.AdamW(
+        model.parameters(),
+        lr=1e-6,
+    )
 
+    model.train()
 
-    model.eval()
+    optimizer.zero_grad()#清空上一次的梯度
 
-    with torch.inference_mode():
+    
+
+    with torch.enable_grad():
         image_features=model.encode_image(pixel_values)
         text_features=model.encode_text(input_ids)
 
@@ -80,18 +88,28 @@ def main():
         )#arange表示生成一个数值范围连续的张量
 
         #计算双向对比损失
-        loss_image=torch.nn.fuctional.cross_entropy(
+        loss_image=torch.nn.functional.cross_entropy(
             logits_per_image,
             labels
         )
 
-        loss_text=torch.nn.fuctional.cross_entropy(
+        loss_text=torch.nn.functional.cross_entropy(
             logits_per_image.T,
             labels
         )
         loss=(loss_image+loss_text)/2
 
 
+        loss.backward()
+        optimizer.step()
+
+        first_parameter=next(model.parameters())#取出模型的第一个参数
+
+        print("first parameter requires_grad:", first_parameter.requires_grad)
+        print("first parameter has gradient:", first_parameter.grad is not None)
+
+        if first_parameter.grad is not None:
+            print("first parameter gradient norm:", first_parameter.grad.norm().item())
 
 
     print("image feature shape:", image_features.shape)
