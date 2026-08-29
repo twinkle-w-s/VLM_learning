@@ -67,7 +67,7 @@ def main():
         )#对两个特征都做L2归一化
 
         logits_per_image=(
-            model.logit._scale.exp()*image_features@text_features.T
+            model.logit_scale.exp()*image_features@text_features.T
 
         )#model.logit._scale.exp()是放大系数，把相似度放大到更适合交叉熵损失的范围
         print("logits形状：",logits_per_image.shape)
