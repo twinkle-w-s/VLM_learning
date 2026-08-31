@@ -41,6 +41,24 @@ class LoRALinear(nn.Module):
         for parameter in self.base_layer.parameters():
             parameter.requires_grad=False
 
+        # ========== 添加属性代理 ==========
+        @property
+        def weight(self):
+            return self.base_layer.weight
+
+        @property
+        def bias(self):
+            return self.base_layer.bias
+
+        @property
+        def in_features(self):
+            return self.base_layer.in_features
+
+        @property
+        def out_features(self):
+            return self.base_layer.out_features
+        # =================================
+
     def forward(self,x):
         base_output=self.base_layer(x)
 
