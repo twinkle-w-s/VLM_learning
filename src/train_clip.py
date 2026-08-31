@@ -128,6 +128,9 @@ def main():
         alpha=16,
         dropout=0.0,
     )
+    
+    model = model.to(device)#再装载一次
+
 
     trainable,total=count_trainable_parameters(model)
 
