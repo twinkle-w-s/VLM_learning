@@ -107,14 +107,41 @@ def main():
         device=device
     )
     #打印lora相关信息
-    print("linear layers in the CLIP model:")
-    for name,module in model.named_modules():
-        if isinstance(module, torch.nn.Linear):
-            print(
-                name,"infeatures=",module.in_features,
-                "out_features=",module.out_features
-            )
-    raise SystemExit
+    # print("linear layers in the CLIP model:")
+    # for name,module in model.named_modules():
+    #     if isinstance(module, torch.nn.Linear):
+    #         print(
+    #             name,"infeatures=",module.in_features,
+    #             "out_features=",module.out_features
+    #         )
+    for parameter in model.parameters():
+        parameter.requires_grad=False
+    target_names=[
+        "c_fc",
+        "c_proj"
+    ]
+
+    add_lora_to_linear_layers(
+        module=model,
+        target_names=target_names,
+        rank=8,
+        alpha=16,
+        dropout=0.0,
+    )
+
+    trainable,total=count_trainable_parameters(model)
+
+    print(f"total parameters:{total:,}")
+    print(f"trainable parameters:{trainable:,}")
+    print(
+        f"trainable ratio:"
+        f"{100*trainable/total:.4f}%"
+    )
+    print("trainable parameter names:")
+    for name,parameter in model.named_parameters():
+        if parameter.requires_grad:
+            print(name,tuple(parameter.shape))
+
 
     tokenizer=open_clip.get_tokenizer(config["model_name"])#把caption的text映射成文本向量库中数值的方法
     train_dataset=Flickr30KDataset(
@@ -131,10 +158,15 @@ def main():
         pin_memory=True,#让 CPU 到 GPU 的数据传输更高效
     )
 
-   
+    trainable_parameters=[
+        parameter
+        for parameter in model.parameters()
+        if parameter.requires_grad
+    ]
+
     #优化器
     optimizer=torch.optim.AdamW(
-        model.parameters(),
+        trainable_parameters,
         lr=config["learning_rate"],
         weight_decay=0.01
     )
