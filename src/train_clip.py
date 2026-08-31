@@ -106,7 +106,7 @@ def main():
         cache_dir=model_cache,
         device=device
     )
-
+    #打印lora相关信息
     print("linear layers in the CLIP model:")
     for name,module in model.named_modules():
         if isinstance(module, torch.nn.Linear):
@@ -114,6 +114,7 @@ def main():
                 name,"infeatures=",module.in_features,
                 "out_features=",module.out_features
             )
+    raise SystemExit
 
     tokenizer=open_clip.get_tokenizer(config["model_name"])#把caption的text映射成文本向量库中数值的方法
     train_dataset=Flickr30KDataset(
