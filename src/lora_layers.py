@@ -99,5 +99,13 @@ def count_trainable_parameters(model):
             trainable+=parameter.numel()#表示一个参数张量中有多少个元素
     return trainable,total
 
+def get_lora_state_dict(model):
+    lora_state_dict={}
+
+    for name ,parameter in model.named_parameters():
+        if "lora_A" in name or "lora_B" in name:
+            lora_state_dict[name]=parameter.detach().cpu()# 把lora的参数从当前计算图中拿出来，转到cpu上，这样能在保存时只存lora的参数，而不存完整的clip
+    return lora_state_dict
+
     
     

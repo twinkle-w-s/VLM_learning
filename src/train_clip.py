@@ -9,7 +9,7 @@ from pathlib import Path
 
 from flickr30k_datasets import Flickr30KDataset
 from evaluate_retrieval import evaluate_retrieval
-from lora_layers import add_lora_to_linear_layers, count_trainable_parameters
+from lora_layers import add_lora_to_linear_layers, count_trainable_parameters, get_lora_state_dict
 
 #固定随机种子
 def set_seed(seed):
@@ -220,8 +220,31 @@ def main():
             )
 
             loss.backward()
-            optimizer.step()
+            
 
+            if epoch==0 and step==0:
+                lora_a_grad_norm=0.0
+                lora_b_grad_norm=0.0
+                frozen_grad_count=0
+
+                for name,parameter in model.named_parameters():
+                    if parameter.grad is None:
+                        continue
+
+                    if "lora_A" in name:
+                        lora_a_grad_norm+=parameter.grad.norm().item()
+                    elif "lora_B" in name:
+                        lora_b_grad_norm+=parameter.grad.norm().item()
+                    else:
+                        frozen_grad_count+=1
+                print(
+                    "first batch gradient check:",
+                    f"lora_A={lora_a_grad_norm:.6f},",
+                    f"lora_B={lora_b_grad_norm:.6f},",
+                    f"frozen_with_grad={frozen_grad_count}",
+                )
+
+            optimizer.step()
             batch_size=pixel_values.shape[0]
 
             predictions=logits_per_image.argmax(dim=1)
@@ -273,8 +296,21 @@ def main():
             val_metrics=val_metrics,
             checkpoint_path=checkpoint_path,
         )
-    
 
+        lora_checkpoint={
+            "epoch":epoch+1,
+            "lora_state_dict":get_lora_state_dict(model),
+            "config":config,
+            "validation_metrics":val_metrics
+        }
+        lora_checkpoint_path = (
+                output_dir / f"epoch_{epoch + 1:02d}_lora.pt"
+            )
+        torch.save(
+            lora_checkpoint,
+            lora_checkpoint_path
+        )
+        print(f"LoRA adapter saved to: {lora_checkpoint_path}")
 
 if __name__ == "__main__":
     main()
