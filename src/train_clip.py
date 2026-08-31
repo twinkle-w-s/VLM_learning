@@ -5,8 +5,11 @@ import open_clip
 import torch
 import yaml
 from torch.utils.data import DataLoader
+from pathlib import Path
 
 from flickr30k_datasets import Flickr30KDataset
+from evaluate_retrieval import evaluate_retrieval
+from lora_layers import add_lora_to_linear_layers, count_trainable_parameters
 
 #固定随机种子
 def set_seed(seed):
@@ -59,6 +62,29 @@ def compute_clip_loss(model,pixel_values,input_ids):
 
     return loss,logits_per_image
 
+def save_checkpoint(
+    model,
+    optimizer,
+    epoch,
+    config,
+    epoch_loss,
+    epoch_recall,
+    val_metrics,
+    checkpoint_path,
+):
+    checkpoint = {
+        "epoch": epoch + 1,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "config": config,
+        "epoch_loss": epoch_loss,
+        "epoch_recall_at_1": epoch_recall,
+        "validation_metrics": val_metrics,
+    }
+
+    torch.save(checkpoint, checkpoint_path)
+
+    print(f"checkpoint saved to: {checkpoint_path}")
 
 def main():
     config_path="configs/flickr30k-debug.yaml"
@@ -71,6 +97,8 @@ def main():
 
     storage_root = f"/data/{os.environ['USER']}/vlm_learning"
     model_cache = f"{storage_root}/models/open_clip"
+    output_dir = Path(storage_root) / config["output_dir"]
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     model, _, preprocess=open_clip.create_model_and_transforms(
         config["model_name"],
@@ -78,6 +106,14 @@ def main():
         cache_dir=model_cache,
         device=device
     )
+
+    print("linear layers in the CLIP model:")
+    for name,module in model.named_modules():
+        if isinstance(module, torch.nn.Linear):
+            print(
+                name,"infeatures=",module.in_features,
+                "out_features=",module.out_features
+            )
 
     tokenizer=open_clip.get_tokenizer(config["model_name"])#把caption的text映射成文本向量库中数值的方法
     train_dataset=Flickr30KDataset(
@@ -95,9 +131,6 @@ def main():
     )
 
    
-    
-
-    
     #优化器
     optimizer=torch.optim.AdamW(
         model.parameters(),
@@ -105,11 +138,28 @@ def main():
         weight_decay=0.01
     )
 
+    val_dataset = Flickr30KDataset(
+        split_init="val",
+        preprocess=preprocess,
+        tokenizer=tokenizer,
+    )
+
+    val_loader = DataLoader(
+        dataset=val_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        num_workers=config["num_workers"],
+        pin_memory=True,
+    )
+
+    print("validation dataset size:", len(val_dataset))
+
     model.train()
 
     num_epochs=config["epochs"]
 
     for epoch in range(num_epochs):
+        model.train()
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
@@ -117,7 +167,7 @@ def main():
         print(f"starting epoch {epoch + 1}/{num_epochs}")
 
 
-        for step, batch in train_loader:
+        for step, batch in enumerate(train_loader):
             pixel_values=batch["pixel_values"].to(
                 device,
                 non_blocking=True,#使用固定内存时，让cpu到gpu更快
@@ -161,15 +211,34 @@ def main():
                     f"loss={current_loss:.4f}, "
                     f"recall@1={current_recall:.4f}"
                 )
-                epoch_loss = total_loss / total_samples
-
-        #打印epoch信息        
+        #打印epoch信息   
+        epoch_loss = total_loss / total_samples             
         epoch_recall = total_correct / total_samples
 
         print(
             f"epoch {epoch + 1} finished: "
             f"loss={epoch_loss:.4f}, "
             f"recall@1={epoch_recall:.4f}"
+        )
+        val_metrics = evaluate_retrieval(
+            model=model,
+            dataloader=val_loader,
+            device=device,
+        )
+
+        print("validation metrics:", val_metrics)
+
+        checkpoint_path = output_dir / f"epoch_{epoch + 1:02d}.pt"
+
+        save_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            epoch=epoch,
+            config=config,
+            epoch_loss=epoch_loss,
+            epoch_recall=epoch_recall,
+            val_metrics=val_metrics,
+            checkpoint_path=checkpoint_path,
         )
     
 
