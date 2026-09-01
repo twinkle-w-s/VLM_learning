@@ -156,6 +156,7 @@ def main():
         alpha=alpha,
         dropout=dropout
     )
+    model = model.to(device)  # 再装载一次模型到设备上
 
     replaced_layers=sum(
         isinstance(module, LoRALinear)#如果module是LoRALinear的实例，就返回True，否则返回False，然后通过sum()函数统计True的数量
@@ -227,7 +228,9 @@ def main():
         "number of validation batches:",
         len(validation_loader),
     )
-
+    ####################训练循环########################
+    best_validation_loss = float("inf")
+    training_history = []
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0.0
@@ -272,12 +275,44 @@ def main():
             f"Validation Loss: {average_validation_loss:.4f}"
         )
 
+        training_history.append(
+            {
+                "epoch": epoch + 1,
+                "train_loss": average_train_loss,
+                "validation_loss": average_validation_loss,
+            }
+        )
 
+        checkpoint={
+            "epoch": epoch + 1,
+            "lora_state_dict": get_lora_state_dict(model),
+            "config": config,
+            
+            "train_loss": average_train_loss,
+            "validation_loss": average_validation_loss,
+            "training_history": training_history,
+        }
 
+        checkpoint_path = (
+            output_dir / f"epoch_{epoch + 1:02d}_lora.pt"
+        )
+        torch.save(checkpoint, checkpoint_path)
+        print(f"Saved checkpoint to {checkpoint_path}")
 
+        if average_validation_loss < best_validation_loss:
+            best_validation_loss = average_validation_loss
+            best_checkpoint_path = (
+                output_dir / "best_model_lora.pt"
+            )
+            torch.save(checkpoint, best_checkpoint_path)
+            print(
+                f"New best model saved to {best_checkpoint_path}"
+            )
+    history_path = output_dir / "training_history.yaml"
+    with open(history_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(training_history, f,allow_unicode=True)#这里会把训练历史保存为yaml文件，allow_unicode=True允许保存中文字符
 
-    
-
+    print(f"Training history saved to {history_path}")
 
 if __name__ == "__main__":
     main()
