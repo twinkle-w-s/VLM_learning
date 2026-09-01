@@ -39,7 +39,48 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+def move_batch_to_device(batch, device):
+    return {
+        name: value.to(device)
+        for name, value in batch.items()
+        if torch.is_tensor(value)
+    }
 
+def compute_blip_loss(model, batch):
+    input_ids = batch["input_ids"]
+    pixel_values = batch["pixel_values"]
+    attention_mask = batch["attention_mask"]
+
+    labels = input_ids.clone()
+    labels[batch["attention_mask"] == 0] = -100
+
+    outputs = model(
+        input_ids=input_ids,
+        pixel_values=pixel_values,
+        labels=labels,
+        attention_mask=attention_mask,
+    )#输入四个关键词，来自batch中，返回一个包含loss的outputs对象
+    #不同于CLIP模型，BLIP模型的forward函数直接返回loss，而不是logits，logits还要自己手动实现交叉熵，这里不用
+
+    return outputs.loss
+
+
+def evaluate_loss(model, data_loader, device):
+    model.eval()
+    total_loss = 0.0
+    total_samples = 0
+
+    with torch.inference_mode():
+        for batch in data_loader:
+            batch = move_batch_to_device(batch, device)
+            loss = compute_blip_loss(model, batch)
+            batch_size = batch["input_ids"].size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
+    model.train()
+
+    average_loss = total_loss / total_samples if total_samples > 0 else 0.0
+    return average_loss
 
 
 def main():
@@ -84,7 +125,7 @@ def main():
     ################################加载模型和处理器################################
     model = BlipForConditionalGeneration.from_pretrained(
         model_path,
-        cache_dir=dataset_cache,
+        local_files_only=True,
     ).to(device)
 
     processor = BlipProcessor.from_pretrained(
@@ -99,10 +140,10 @@ def main():
 
     lora_config = config["lora"]
 
-    target_names = lora_config("target_names")
-    rank = lora_config("rank")
-    alpha = lora_config("alpha")
-    dropout = lora_config("dropout")
+    target_names = lora_config["target_names"]
+    rank = lora_config["rank"]
+    alpha = lora_config["alpha"]
+    dropout = lora_config["dropout"]
 
     print("LoRA target names:", target_names)
     print("LoRA rank:", rank)
@@ -135,6 +176,108 @@ def main():
     for name, parameter in model.named_parameters():
         if parameter.requires_grad:
             print(name, tuple(parameter.shape))#tuple(parameter.shape)返回参数的形状，例如torch.Size([512, 512])，然后转换为元组(512, 512)
+    ######################导入数据集####################################
+    train_dataset = Flickr30KBLIPDataset(
+        split=config["train_split"],
+        processor=processor,
+        dataset_dir=dataset_cache,
+    )
+
+    validation_dataset = Flickr30KBLIPDataset(
+        split=config["validation_split"],
+        processor=processor,
+        dataset_dir=dataset_cache,
+    )
+    ############创建数据加载器#######################
+
+    train_loader=DataLoader(
+        train_dataset,
+        batch_size=config["batch_size"],
+        shuffle=True,
+        num_workers=config["num_workers"],
+        pin_memory=True,
+    )
+
+    validation_loader=DataLoader(
+        validation_dataset, 
+        batch_size=config["batch_size"],
+        shuffle=False,  
+        num_workers=config["num_workers"],
+        pin_memory=True,
+    )
+
+    trainable_parameters = [
+        parameter
+        for parameter in model.parameters()
+        if parameter.requires_grad
+    ]
+
+    ###定义优化器###
+    optimizer = torch.optim.AdamW(
+        params=trainable_parameters,
+        lr=config["learning_rate"],
+        weight_decay=config["weight_decay"],
+    )
+
+    num_epochs = config["epochs"]
+
+    print("number of epochs:", num_epochs)
+    print("number of training batches:", len(train_loader))
+    print(
+        "number of validation batches:",
+        len(validation_loader),
+    )
+
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0.0
+        total_samples = 0
+
+        for step, batch in enumerate(train_loader):
+            batch = move_batch_to_device(batch, device)
+            
+            loss = compute_blip_loss(model, batch)
+            optimizer.zero_grad()
+            loss.backward()#计算梯度
+            optimizer.step()#更新参数
+
+            batch_size = batch["input_ids"].size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
+
+            if (step + 1) % 100 == 0:
+                current_loss = (
+                    total_loss
+                    / total_samples
+                )
+
+                print(
+                    f"epoch={epoch + 1}, "
+                    f"step={step + 1}/"
+                    f"{len(train_loader)}, "
+                    f"loss={current_loss:.4f}"
+                )
+
+        average_train_loss = (
+            total_loss / total_samples if total_samples > 0 else 0.0
+        )
+
+        average_validation_loss = evaluate_loss(
+            model, validation_loader, device
+        )
+
+        print(
+            f"Epoch [{epoch + 1}/{num_epochs}], "
+            f"Train Loss: {average_train_loss:.4f}, "
+            f"Validation Loss: {average_validation_loss:.4f}"
+        )
+
+
+
+
+
+    
+
 
 if __name__ == "__main__":
     main()
