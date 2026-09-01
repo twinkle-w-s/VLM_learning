@@ -31,7 +31,7 @@ class Flickr30KBLIPDataset(Dataset):
         caption = sample["caption"][0]
 
         encoded=self.processor(
-            image=image,
+            images=image,
             text=caption,
             return_tensors="pt",
             padding="max_length",
