@@ -43,10 +43,8 @@ def set_seed(seed):
 
 
 def main():
-    config = load_config(
-        "blip-debug.yaml"
-    )
-
+    config_path = Path(__file__).resolve().parents[2] / "configs" / "blip-debug.yaml"
+    config = load_config(config_path)
     set_seed(config["seed"])
 
     storage_root = Path("/data") / os.environ["USER"] / "vlm_learning"
