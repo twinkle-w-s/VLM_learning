@@ -32,7 +32,15 @@ def main():
         model_path,
         cache_dir=str(dataset_cache),#如果本地没有，还是回从网络下载到这个目录
         trust_remote_code=True,
+    )   
+    
+    model = BlipForConditionalGeneration.from_pretrained(
+        model_path,
+        local_files_only=True,
     )
+
+    model = model.to(device)
+    model.train()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
