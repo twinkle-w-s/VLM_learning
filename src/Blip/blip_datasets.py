@@ -28,7 +28,7 @@ class Flickr30KBLIPDataset(Dataset):
     def __getitem__(self, index):
         sample = self.dataset[index]
         image = sample["image"].convert("RGB")
-        caption = sample["caption"][0]
+        caption = sample["caption"][0]#只取了第一个
 
         encoded=self.processor(
             images=image,
