@@ -62,7 +62,7 @@ def main():
     print(f"total parameters: {total:,}")
     print(f"trainable parameters: {trainable:,}")
 
-        checkpoint = torch.load(
+    checkpoint = torch.load(
         adapter_path,
         map_location=device,
     )
