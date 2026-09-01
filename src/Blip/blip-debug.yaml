@@ -15,7 +15,9 @@ seed: 42
 output_dir: outputs/blip_lora_debug
 
 lora:
-  target_names: []
+  target_names: 
+    - fc1
+    - fc2
   rank: 8
   alpha: 16
   dropout: 0.0
