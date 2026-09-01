@@ -168,25 +168,25 @@ def main():
             "Please check the target_names in the configuration."
         )
     trainable, total = count_trainable_parameters(model)
-    print(f"Trainable parameters: {trainable:,}, Total parameters: {total:,}")#按照千位分隔符格式化输出
-    print("replaced layers:", replaced_layers)
+    # print(f"Trainable parameters: {trainable:,}, Total parameters: {total:,}")#按照千位分隔符格式化输出
+    # print("replaced layers:", replaced_layers)
 
 
-    print("trainable parameter names:")
-    for name, parameter in model.named_parameters():
-        if parameter.requires_grad:
-            print(name, tuple(parameter.shape))#tuple(parameter.shape)返回参数的形状，例如torch.Size([512, 512])，然后转换为元组(512, 512)
+    # print("trainable parameter names:")
+    # for name, parameter in model.named_parameters():
+    #     if parameter.requires_grad:
+    #         print(name, tuple(parameter.shape))#tuple(parameter.shape)返回参数的形状，例如torch.Size([512, 512])，然后转换为元组(512, 512)
     ######################导入数据集####################################
     train_dataset = Flickr30KBLIPDataset(
         split=config["train_split"],
         processor=processor,
-        dataset_dir=dataset_cache,
+        dataset_cache=dataset_cache,
     )
 
     validation_dataset = Flickr30KBLIPDataset(
         split=config["validation_split"],
         processor=processor,
-        dataset_dir=dataset_cache,
+        dataset_cache=dataset_cache,
     )
     ############创建数据加载器#######################
 
