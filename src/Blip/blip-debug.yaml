@@ -1,0 +1,21 @@
+model_dir: models/blip-image-captioning-base
+dataset_cache: datasets/flickr30k
+
+train_split: train
+validation_split: val
+
+batch_size: 2
+num_workers: 0
+max_length: 30
+epochs: 1
+learning_rate: 0.00001
+weight_decay: 0.01
+seed: 42
+
+output_dir: outputs/blip_lora_debug
+
+lora:
+  target_names: []
+  rank: 8
+  alpha: 16
+  dropout: 0.0

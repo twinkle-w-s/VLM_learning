@@ -61,4 +61,6 @@ def main():
     for name,count in sorted(leaf_name_counts.items()):#对字典的items()进行排序，返回一个列表，每个元素是一个(name,count)元组
         print(name,count)
 
-    
+
+if __name__ == "__main__":
+    main()
