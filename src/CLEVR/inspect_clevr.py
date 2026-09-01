@@ -10,7 +10,7 @@ def get_storage_path():
     )
 def get_data_root():
     storage_root = get_storage_path()
-    return storage_root / "data"
+    return storage_root
 
 def find_clevr_directories(data_root):
     candidates = []
@@ -118,7 +118,7 @@ def main():
 
     for path in scene_files:
         print("-", path)
-        
+
     if question_files:
         question_data = inspect_json_file(
             question_files[0]
