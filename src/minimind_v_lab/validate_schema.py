@@ -9,7 +9,7 @@ from typing import Any
 
 import pyarrow.parquet as pq
 from PIL import Image
-
+#检查数据表是否符合要求，主要检查两列：conversations和image_bytes
 
 REQUIRED_COLUMNS = {"conversations", "image_bytes"}
 
@@ -50,7 +50,7 @@ def normalize_image_bytes(raw:Any)->list[bytes]:
 
     return []
 
-
+#输入数据行字典
 def validate_row(row: dict[str, Any]) -> list[str]:
     errors = []
 
@@ -99,7 +99,7 @@ def main() -> int:
     )
     parser.add_argument("parquet_path", type=Path)
     parser.add_argument("--max-rows", type=int, default=100)
-
+    #读取path
     args = parser.parse_args()
 
     metadata = pq.read_metadata(args.parquet_path)
