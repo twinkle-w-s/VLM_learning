@@ -9,7 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from PIL import Image
 
-def read_image_bytes(image_bytes: Path) -> bytes:
+def read_image_bytes(image_path: Path) -> bytes:
     with Image.open(image_path) as image:
         image=image.convert("RGB")
 
