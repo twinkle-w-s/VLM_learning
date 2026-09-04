@@ -63,32 +63,7 @@ def main() -> int:
     questions_data = load_json(QUESTIONS_PATH)
     scenes_data = load_json(SCENES_PATH)
 
-    spatial_questions = [
-        question
-        for question in questions
-        if is_spatial_question(question)
-    ] 
-    print(
-        "spatial question count:",
-        len(spatial_questions),
-    )
-
-    first_spatial_question = spatial_questions[0]
-
-    print(
-        "first spatial question:",
-        first_spatial_question["question"],
-    )
-
-    print(
-        "spatial relations:",
-        get_spatial_relations(first_spatial_question),
-    )
-
-    print(
-        "program length:",
-        len(first_spatial_question["program"]),
-    )
+    
       
 
     print("question keys:", questions_data.keys())
@@ -142,6 +117,33 @@ def main() -> int:
             "rows:",
             len(relation_data),
         )
+
+    spatial_questions = [
+        question
+        for question in questions
+        if is_spatial_question(question)
+    ] 
+    print(
+        "spatial question count:",
+        len(spatial_questions),
+    )
+
+    first_spatial_question = spatial_questions[0]
+
+    print(
+        "first spatial question:",
+        first_spatial_question["question"],
+    )
+
+    print(
+        "spatial relations:",
+        get_spatial_relations(first_spatial_question),
+    )
+
+    print(
+        "program length:",
+        len(first_spatial_question["program"]),
+    )
 
     return 0
 
