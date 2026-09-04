@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Learning Planner"
+  short_description: "Turn job-driven project ideas into staged skill-learning plans"
+  default_prompt: "根据岗位要求和我的项目目标，先设计一个可验证的项目制学习方案。"

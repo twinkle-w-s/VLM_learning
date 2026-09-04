@@ -1,0 +1,4 @@
+interface:
+  display_name: "Guided Project Coding Tutor"
+  short_description: "Teach project code incrementally with explanations and checks"
+  default_prompt: "读取当前项目和已确认计划，带我按小段代码逐步实现，并解释每一段。"
