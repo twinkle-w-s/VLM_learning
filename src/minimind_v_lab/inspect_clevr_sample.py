@@ -25,14 +25,71 @@ SCENES_PATH = (
 )
 #定位到数据集
 
+SPATIAL_RELATIONS = {
+    "left",
+    "right",
+    "front",
+    "behind",
+    "above",
+    "below",
+}
+
+
 def load_json(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as file:
         return json.load(file)
 
+def is_spatial_question(question: dict) -> bool:
+    for step in question["program"]:
+        if step["function"] != "relate":
+            continue
+
+        relation = step["value_inputs"][0]#根据value_inputs获取关系类型
+
+        if relation in SPATIAL_RELATIONS:
+            return True
+
+    return False
+def get_spatial_relations(question: dict) -> list[str]:
+    relations = []
+
+    for step in question["program"]:
+        if step["function"] == "relate":
+            relations.extend(step["value_inputs"])
+
+    return relations#将所有的关系类型都返回为列表
 
 def main() -> int:
     questions_data = load_json(QUESTIONS_PATH)
     scenes_data = load_json(SCENES_PATH)
+
+    spatial_questions = [
+        question
+        for question in questions
+        if is_spatial_question(question)
+    ] 
+    print(
+        "spatial question count:",
+        len(spatial_questions),
+    )
+
+    first_spatial_question = spatial_questions[0]
+
+    print(
+        "first spatial question:",
+        first_spatial_question["question"],
+    )
+
+    print(
+        "spatial relations:",
+        get_spatial_relations(first_spatial_question),
+    )
+
+    print(
+        "program length:",
+        len(first_spatial_question["program"]),
+    )
+      
 
     print("question keys:", questions_data.keys())
     print("scene keys:", scenes_data.keys())
@@ -85,15 +142,6 @@ def main() -> int:
             "rows:",
             len(relation_data),
         )
-
-
-
-
-
-
-
-
-
 
     return 0
 
