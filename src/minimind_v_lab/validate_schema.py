@@ -13,12 +13,12 @@ from PIL import Image
 
 REQUIRED_COLUMNS = {"conversations", "image_bytes"}
 
-def parse_convrsations(raw:Any)->tuple[list[dict[str,Any]] | None, str| None]:
+def parse_conversations(raw:Any)->tuple[list[dict[str,Any]] | None, str| None]:
     if isinstance(raw,str):
         try:
             raw = json.loads(raw)
         except json.JSONDecodeError:
-            return None, "invallid_conversations_json"
+            return None, "invalid_conversations_json"
         
     if not isinstance(raw, list) or not raw:
         return None, "conversations_not_nonempty_list"
