@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-
+from collections import Counter
 
 DATA_ROOT = (
     Path("/data")
@@ -59,6 +59,18 @@ def get_spatial_relations(question: dict) -> list[str]:
 
     return relations#将所有的关系类型都返回为列表
 
+def count_spatial_relations(
+    questions: list[dict],
+) -> Counter:
+    counter = Counter()
+
+    for question in questions:
+        relations = get_spatial_relations(question)
+        counter.update(relations)
+
+    return counter
+
+
 def main() -> int:
     questions_data = load_json(QUESTIONS_PATH)
     scenes_data = load_json(SCENES_PATH)
@@ -66,18 +78,18 @@ def main() -> int:
     
       
 
-    print("question keys:", questions_data.keys())
-    print("scene keys:", scenes_data.keys())
+    # print("question keys:", questions_data.keys())
+    # print("scene keys:", scenes_data.keys())
 
-    print(
-        "question count:",
-        len(questions_data["questions"]),
-    )
+    # print(
+    #     "question count:",
+    #     len(questions_data["questions"]),
+    # )
 
-    print(
-        "scene count:",
-        len(scenes_data["scenes"]),
-    )
+    # print(
+    #     "scene count:",
+    #     len(scenes_data["scenes"]),
+    # )
     #统计总个数
 
     questions = questions_data["questions"]
@@ -85,15 +97,15 @@ def main() -> int:
 
     question = questions[0]
 
-    print("question index:", question["question_index"])
-    print("image index:", question["image_index"])
-    print("question text:", question["question"])
-    print("answer:", question["answer"])
+    # print("question index:", question["question_index"])
+    # print("image index:", question["image_index"])
+    # print("question text:", question["question"])
+    # print("answer:", question["answer"])
 
-    print("program:")
+    # print("program:")
 
-    for step in question["program"]:
-        print("  ", step)
+    # for step in question["program"]:
+    #     print("  ", step)
 
     scene_by_image_index = {
         scene["image_index"]: scene
@@ -101,13 +113,13 @@ def main() -> int:
     }
     scene = scene_by_image_index[question["image_index"]]
 
-    print("scene image filename:", scene["image_filename"])
-    print("object count:", len(scene["objects"]))
+    # print("scene image filename:", scene["image_filename"])
+    # print("object count:", len(scene["objects"]))
 
-    first_object = scene["objects"][0]
+    # first_object = scene["objects"][0]
 
-    print("first object:")
-    print(first_object)
+    # print("first object:")
+    # print(first_object)
 
     print("relationship types:")
 
@@ -122,11 +134,22 @@ def main() -> int:
         question
         for question in questions
         if is_spatial_question(question)
-    ] 
+    ]
+    relation_counts = count_spatial_relations(
+        spatial_questions
+    )
+    print("relation counts:")
+
+    for relation, count in sorted(
+        relation_counts.items()
+    ):
+        print(f"  {relation}: {count}")
+
     print(
         "spatial question count:",
         len(spatial_questions),
     )
+
 
     first_spatial_question = spatial_questions[0]
 
@@ -150,3 +173,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
+#整体数据集结构是，一图片对应一个场景，一个场景包含若干个物体和它们之间的关系。、
+# 一个场景有多个问题，
