@@ -14,13 +14,13 @@ def read_image_bytes(image_path: Path) -> bytes:
         image=image.convert("RGB")
 
         buffer= io.BytesIO()#创建内存缓冲
-        image.save(buffer, format="JPNG",quality=95)#图片写入缓冲，以jepg编码
+        image.save(buffer, format="JPEG",quality=95)#图片写入缓冲，以jpeg编码
 
         return buffer.getvalue()
 
 
 
-def build_row(image_bytes: bytes, question: str) -> dict:
+def build_row(image_bytes: bytes, question: str, answer: str) -> dict:
     conversations = [
         {
             "role": "user",
