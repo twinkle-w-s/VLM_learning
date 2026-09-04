@@ -47,6 +47,54 @@ def main() -> int:
         len(scenes_data["scenes"]),
     )
     #统计总个数
+
+    questions = questions_data["questions"]
+    scenes = scenes_data["scenes"]
+
+    question = questions[0]
+
+    print("question index:", question["question_index"])
+    print("image index:", question["image_index"])
+    print("question text:", question["question"])
+    print("answer:", question["answer"])
+
+    print("program:")
+
+    for step in question["program"]:
+        print("  ", step)
+
+    scene_by_image_index = {
+        scene["image_index"]: scene
+        for scene in scenes
+    }
+    scene = scene_by_image_index[question["image_index"]]
+
+    print("scene image filename:", scene["image_filename"])
+    print("object count:", len(scene["objects"]))
+
+    first_object = scene["objects"][0]
+
+    print("first object:")
+    print(first_object)
+
+    print("relationship types:")
+
+    for relation_name, relation_data in scene["relationships"].items():
+        print(
+            relation_name,
+            "rows:",
+            len(relation_data),
+        )
+
+
+
+
+
+
+
+
+
+
     return 0
 
 
