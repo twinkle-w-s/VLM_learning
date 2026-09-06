@@ -79,6 +79,9 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    records = list(read_jsonl(args.input_path))
+
+    print("input records:", len(records))
 
     rows = []
 
