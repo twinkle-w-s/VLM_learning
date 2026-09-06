@@ -79,55 +79,55 @@ if args.raw_only:
 
 
 
-# if vision_root.is_dir():
-#     print("[OK] vision encoder directory exists")
-# else:
-#     print("[WARN] vision encoder directory is missing")
+if vision_root.is_dir():
+    print("[OK] vision encoder directory exists")
+else:
+    print("[WARN] vision encoder directory is missing")
 
-# sys.path.insert(0, str(minimind_root))
+sys.path.insert(0, str(minimind_root))
 
-# from dataset.lm_dataset import VLMDataset
+from dataset.lm_dataset import VLMDataset
 
-# print("VLMDataset module:", inspect.getsourcefile(VLMDataset))
-# print("VLMDataset constructor:")
-# print(inspect.signature(VLMDataset.__init__))
+print("VLMDataset module:", inspect.getsourcefile(VLMDataset))
+print("VLMDataset constructor:")
+print(inspect.signature(VLMDataset.__init__))
 
-# from transformers import AutoTokenizer
+from transformers import AutoTokenizer
 
-# tokenizer = AutoTokenizer.from_pretrained(
-#     str(tokenizer_root),
-#     local_files_only=True,
-# )
+tokenizer = AutoTokenizer.from_pretrained(
+    str(tokenizer_root),
+    local_files_only=True,
+)
 
-# print("tokenizer vocab size:", len(tokenizer))
-# print("tokenizer pad token:", tokenizer.pad_token)
-# print("tokenizer eos token:", tokenizer.eos_token)
+print("tokenizer vocab size:", len(tokenizer))
+print("tokenizer pad token:", tokenizer.pad_token)
+print("tokenizer eos token:", tokenizer.eos_token)
 
-# from transformers import SiglipImageProcessor
+from transformers import SiglipImageProcessor
 
-# processor = SiglipImageProcessor.from_pretrained(
-#     str(vision_root),
-#     local_files_only=True,
-# )
+processor = SiglipImageProcessor.from_pretrained(
+    str(vision_root),
+    local_files_only=True,
+)
 
-# print("processor:", type(processor).__name__)
+print("processor:", type(processor).__name__)
 
-# dataset = VLMDataset(
-#     str(dataset_path),
-#     tokenizer,
-#     preprocess=processor,
-# )
+dataset = VLMDataset(
+    str(dataset_path),
+    tokenizer,
+    preprocess=processor,
+)
 
-# print("dataset size:", len(dataset))
+print("dataset size:", len(dataset))
 
-# input_ids, labels, image_data = dataset[0]
+input_ids, labels, image_data = dataset[0]
 
-# print("input_ids shape:", tuple(input_ids.shape))
-# print("labels shape:", tuple(labels.shape))
-# print("image data type:", type(image_data).__name__)
+print("input_ids shape:", tuple(input_ids.shape))
+print("labels shape:", tuple(labels.shape))
+print("image data type:", type(image_data).__name__)
 
-# if hasattr(image_data, "items"):
-#     for name, tensor in image_data.items():
-#         print(f"image_data[{name}] shape:", tuple(tensor.shape))
-# else:
-#     print("image_data shape:", tuple(image_data.shape))
+if hasattr(image_data, "items"):
+    for name, tensor in image_data.items():
+        print(f"image_data[{name}] shape:", tuple(tensor.shape))
+else:
+    print("image_data shape:", tuple(image_data.shape))
