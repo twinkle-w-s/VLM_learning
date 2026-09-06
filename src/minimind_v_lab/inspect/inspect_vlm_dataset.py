@@ -7,10 +7,7 @@ import sys
 from pathlib import Path
 import json
 import pyarrow.parquet as pq
-from dataset.lm_dataset import VLMDataset
-from trainer.trainer_utils import vlm_collate_fn
-from transformers import AutoTokenizer
-from transformers import SiglipImageProcessor
+
 
 #导入路线
 parser = argparse.ArgumentParser()
@@ -34,7 +31,10 @@ vision_root = model_root / "siglip2-base-p32-256-ve"
 # print("minimind root:", minimind_root)
 # print("tokenizer root:", tokenizer_root)
 # print("vision root:", vision_root)
-
+from dataset.lm_dataset import VLMDataset
+from trainer.trainer_utils import vlm_collate_fn
+from transformers import AutoTokenizer
+from transformers import SiglipImageProcessor
 
 #如果数据或模型路径不存在，报错
 if not dataset_path.is_file():
