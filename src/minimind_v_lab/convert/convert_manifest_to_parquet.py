@@ -1,4 +1,3 @@
-# 本脚本把 CLEVR manifest 和图像转换为 MiniMind-V Parquet。
 from __future__ import annotations
 
 import argparse
@@ -63,4 +62,51 @@ def build_row(record: dict) -> dict:
             answer=record["answer"],
         ),
         "image_bytes": read_image_bytes(image_path),
-    }#根据image_filename取出
+    }#根据image_filename取出record中的多个字段,训练时只使用conversation和image
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "input_path",
+        type=Path,
+    )
+
+    parser.add_argument(
+        "output_path",
+        type=Path,
+    )
+
+    args = parser.parse_args()
+
+    rows = []
+
+    for index, record in enumerate(records, start=1):
+        row = build_row(record)
+        rows.append(row)
+
+        if index <= 3:
+            print(
+                "converted:",
+                index,
+                record["image_filename"],
+            )
+
+    args.output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    table = pa.Table.from_pylist(rows)
+    pq.write_table(table, args.output_path)
+
+    print("rows:", table.num_rows)
+    print("columns:", table.column_names)
+    print("output:", args.output_path)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
