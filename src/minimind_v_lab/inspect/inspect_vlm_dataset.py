@@ -26,7 +26,7 @@ minimind_root = args.minimind_root.expanduser().resolve()
 model_root = minimind_root / "model"
 tokenizer_root = model_root
 vision_root = model_root / "siglip2-base-p32-256-ve"
-
+sys.path.insert(0, str(minimind_root))
 # print("dataset:", dataset_path)
 # print("minimind root:", minimind_root)
 # print("tokenizer root:", tokenizer_root)
@@ -83,7 +83,7 @@ image_bytes = row["image_bytes"]
 # else:
 #     print("[WARN] vision encoder directory is missing")
 
-sys.path.insert(0, str(minimind_root))
+
 
 
 
