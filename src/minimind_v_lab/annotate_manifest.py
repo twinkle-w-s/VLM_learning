@@ -76,7 +76,7 @@ def annotate_record(record: dict) -> dict:
         relation_count=relation_count,
     )
 
-    return record
+    return record#返回新的record
 
 
 def main() -> int:

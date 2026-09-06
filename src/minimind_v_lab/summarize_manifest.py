@@ -17,6 +17,10 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    task_counter = Counter()
+    answer_type_counter = Counter()
+    difficulty_counter = Counter()
+    
     image_counter = Counter()
     relation_counter = Counter()
     answer_counter = Counter()
@@ -25,7 +29,9 @@ def main() -> int:
 
     for record in read_manifest(args.manifest_path):
         total += 1
-
+        task_counter.update([record["task_type"]])
+        answer_type_counter.update([record["answer_type"]])
+        difficulty_counter.update([record["difficulty"]])
         image_counter.update(
             [record["image_filename"]]
         )#统计图片出现次数
@@ -45,23 +51,35 @@ def main() -> int:
     print("total records:", total)
     print("unique images:", len(image_counter))
 
-    print("top images:")
+    # print("top images:")
 
-    for image_name, count in image_counter.most_common(10):
-        print(f"  {image_name}: {count}")
+    # for image_name, count in image_counter.most_common(10):
+    #     print(f"  {image_name}: {count}")
 
     print("relation counts:")
     for relation, count in sorted(relation_counter.items()):
         print(f"  {relation}: {count}")
 
-    print("top answers:")
-    for answer, count in answer_counter.most_common(10):
-        print(f"  {answer}: {count}")
+    # print("top answers:")
+    # for answer, count in answer_counter.most_common(10):
+    #     print(f"  {answer}: {count}")
 
-    print("program length distribution:")
-    for length, count in sorted(program_length_counter.items()):
-        print(f"  {length}: {count}")
+    # print("program length distribution:")
+    # for length, count in sorted(program_length_counter.items()):
+    #     print(f"  {length}: {count}")
     #打印统计的信息
+    print("task types:")
+    for name, count in sorted(task_counter.items()):
+        print(f"  {name}: {count}")
+
+    print("answer types:")
+    for name, count in sorted(answer_type_counter.items()):
+        print(f"  {name}: {count}")
+
+    print("difficulty:")
+    for name, count in sorted(difficulty_counter.items()):
+        print(f"  {name}: {count}")
+
 
     #接下来增加集中度指标
     if total > 0:
