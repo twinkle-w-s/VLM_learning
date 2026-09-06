@@ -1,3 +1,4 @@
+# 本脚本统计 manifest 中问题的最终操作及答案类型。
 from __future__ import annotations
 
 import argparse

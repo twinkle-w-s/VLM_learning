@@ -1,3 +1,4 @@
+# 本脚本校验 MiniMind-V Parquet 的对话和图像数据契约。
 from __future__ import annotations
 
 import argparse#解析命令行参数

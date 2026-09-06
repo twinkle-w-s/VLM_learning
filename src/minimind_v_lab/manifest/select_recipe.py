@@ -1,3 +1,4 @@
+# 本脚本按照预设数据配方筛选 manifest 样本。
 from __future__ import annotations
 
 import argparse

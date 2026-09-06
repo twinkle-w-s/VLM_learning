@@ -1,3 +1,4 @@
+# 本脚本检查 CLEVR 原始 JSON 的结构及问题与场景关联。
 from __future__ import annotations
 
 import json

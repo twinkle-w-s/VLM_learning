@@ -1,3 +1,4 @@
+# 本脚本生成最小 MiniMind-V Parquet，用于验证图文数据链路。
 from __future__ import annotations
 
 import argparse

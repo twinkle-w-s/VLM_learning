@@ -1,3 +1,4 @@
+# 本脚本校验 JSONL manifest 的字段、重复项和图像路径。
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,7 @@ REQUIRED_FIELDS = {
 }
 
 def read_jsonl(path:Path):
-    with path.open("r",encoding="utf=8") as file:
+    with path.open("r", encoding="utf-8") as file:
         for line_number,line in enumerate(file,start=1):
             if not line.strip():
                 continue

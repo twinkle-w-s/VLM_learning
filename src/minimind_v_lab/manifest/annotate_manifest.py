@@ -1,3 +1,4 @@
+# 本脚本为 manifest 样本添加任务类型、答案类型和难度标签。
 from __future__ import annotations
 
 import argparse

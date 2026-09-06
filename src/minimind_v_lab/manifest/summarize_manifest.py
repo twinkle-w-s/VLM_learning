@@ -1,3 +1,4 @@
+# 本脚本统计 manifest 的图片、关系、任务和难度分布。
 from __future__ import annotations
 
 import argparse

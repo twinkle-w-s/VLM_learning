@@ -1,14 +1,16 @@
+# 本脚本读取 Parquet，并预览对话字段和图像字段。
 import argparse
 import io
 import json
 from pathlib import Path
+from typing import Any
 
 import pyarrow.parquet as pq
 from PIL import Image
 
 
 
-def summarize_row(row: dict[str, any]) -> dict:
+def summarize_row(row: dict[str, Any]) -> dict:
     conversations= json.loads(row["conversations"])
     roles=[turn["role"] for turn in conversations]
 
