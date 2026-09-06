@@ -7,7 +7,9 @@ import sys
 from pathlib import Path
 import json
 import pyarrow.parquet as pq
-
+from trainer.trainer_utils import vlm_collate_fn
+from transformers import AutoTokenizer
+from transformers import SiglipImageProcessor
 
 #导入路线
 parser = argparse.ArgumentParser()
@@ -17,6 +19,18 @@ parser.add_argument(
     type=Path,
     default=Path.home() / "projects" / "minimind-v",
 )
+parser.add_argument(
+    "--weight",
+    default="llm",
+)
+
+parser.add_argument(
+    "--hidden-size",
+    type=int,
+    default=768,
+)
+#默认找llm_768
+
 
 args = parser.parse_args()
 
@@ -25,16 +39,19 @@ minimind_root = args.minimind_root.expanduser().resolve()
 
 model_root = minimind_root / "model"
 tokenizer_root = model_root
+
 vision_root = model_root / "siglip2-base-p32-256-ve"
+weight_root = minimind_root / "out"
+weight_path = weight_root / (
+    f"{args.weight}_{args.hidden_size}.pth"
+)
 sys.path.insert(0, str(minimind_root))
 # print("dataset:", dataset_path)
 # print("minimind root:", minimind_root)
 # print("tokenizer root:", tokenizer_root)
 # print("vision root:", vision_root)
 from dataset.lm_dataset import VLMDataset
-from trainer.trainer_utils import vlm_collate_fn
-from transformers import AutoTokenizer
-from transformers import SiglipImageProcessor
+
 
 #如果数据或模型路径不存在，报错
 if not dataset_path.is_file():
@@ -82,14 +99,35 @@ image_bytes = row["image_bytes"]
 #     print("[OK] vision encoder directory exists")
 # else:
 #     print("[WARN] vision encoder directory is missing")
+required_vision_files = [
+    "config.json",
+    "preprocessor_config.json",
+    "model.safetensors",#这是参数本体
+]
+
+for filename in required_vision_files:
+    path = vision_root / filename
+    print(f"vision file {filename}:", path.is_file())
+
+#检查权重是否正常
+if weight_path.is_file():
+    size_mb = weight_path.stat().st_size / 1024 / 1024
+    print(f"[OK] base weight exists: {size_mb:.1f} MB")
+else:
+    print("[WARN] base weight is missing")
+    print(
+        "next model-forward step requires:",
+        weight_path,
+    )
 
 
 
 
 
-print("VLMDataset module:", inspect.getsourcefile(VLMDataset))
-print("VLMDataset constructor:")
-print(inspect.signature(VLMDataset.__init__))
+
+# print("VLMDataset module:", inspect.getsourcefile(VLMDataset))
+# print("VLMDataset constructor:")
+# print(inspect.signature(VLMDataset.__init__))
 
 #################加载tokenizer 和processor ##############
 
