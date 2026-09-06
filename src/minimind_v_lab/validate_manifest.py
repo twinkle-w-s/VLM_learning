@@ -65,7 +65,7 @@ def validate_record(
     if not isinstance(record["spatial_relations"], list):
         errors.append("spatial_relations_not_list")
 
-        image_path = image_root / record["image_filename"]
+    image_path = image_root / record["image_filename"]
 
     if not image_path.exists():
         errors.append("image_not_found")
