@@ -17,8 +17,8 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    endpoint_counter = Counter()
-    endpoint_answer_counter = Counter()
+    endpoint_counter = Counter()#按照最后任务计数
+    endpoint_answer_counter = Counter()#按照回答计数
     total = 0
 
     for record in read_manifest(args.manifest_path):
