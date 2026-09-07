@@ -110,21 +110,21 @@ required_vision_files = [
 
 #################加载tokenizer 和processor ##############
 
-# tokenizer = AutoTokenizer.from_pretrained(
-#     str(tokenizer_root),
-#     local_files_only=True,
-# )
+tokenizer = AutoTokenizer.from_pretrained(
+    str(tokenizer_root),
+    local_files_only=True,
+)
 
-# processor = SiglipImageProcessor.from_pretrained(
-#     str(vision_root),
-#     local_files_only=True,
-# )
+processor = SiglipImageProcessor.from_pretrained(
+    str(vision_root),
+    local_files_only=True,
+)
 
-# dataset = VLMDataset(
-#     str(dataset_path),
-#     tokenizer,
-#     preprocess=processor,
-# )
+dataset = VLMDataset(
+    str(dataset_path),
+    tokenizer,
+    preprocess=processor,
+)
 
 
 input_ids, labels, image_data = dataset[0]
