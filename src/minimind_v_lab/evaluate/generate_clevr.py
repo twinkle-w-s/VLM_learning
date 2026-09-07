@@ -1,7 +1,8 @@
 # 这个脚本加载微调后的 MiniMind-V，在 CLEVR 验证集生成答案预览。
+from __future__ import annotations
 from collections import Counter, defaultdict
 import re
-from __future__ import annotations
+
 
 import argparse
 import json
