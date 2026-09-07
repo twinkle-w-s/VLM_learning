@@ -1,5 +1,5 @@
 # 这个脚本用于检查 MiniMind-V 的数据集加载接口、tokenizer 和视觉资源状态。
-# 先完成资源预检，避免把模型文件缺失误判为 Parquet 数据格式错误。
+# 检查使用一条数据，对视觉encoder做一次参数更新的实验
 import torch
 import argparse
 import inspect
@@ -43,6 +43,24 @@ parser.add_argument(
     action="store_true",
 )
 
+parser.add_argument(
+    "--train-step",
+    action="store_true",
+)
+
+parser.add_argument(
+    "--freeze-llm",
+    type=int,
+    choices=[0, 1, 2],
+    default=2,#只训练最小vision
+)
+
+parser.add_argument(
+    "--learning-rate",
+    type=float,
+    default=1e-4,
+)
+
 args = parser.parse_args()
 
 dataset_path = args.parquet_path.expanduser().resolve()
@@ -59,10 +77,10 @@ weight_path = weight_root / (
 sys.path.insert(0, str(minimind_root))
 
 from dataset.lm_dataset import VLMDataset
-from trainer.trainer_utils import vlm_collate_fn
+from trainer.trainer_utils import vlm_collate_fn,init_vlm_model
 from transformers import AutoTokenizer
 from transformers import SiglipImageProcessor
-from model.model_vlm import MiniMindVLM, VLMConfig
+from model.model_vlm import VLMConfig
 
 #如果数据或模型路径不存在，报错
 if not dataset_path.is_file():
@@ -80,26 +98,6 @@ print("parquet rows:", table.num_rows)
 print("parquet columns:", table.column_names)
 
 
-######这里确认关键列是否正确######
-
-
-# row = table.slice(0, 1).to_pylist()[0]
-
-# conversations = row["conversations"]
-# if isinstance(conversations, str):
-#     conversations = json.loads(conversations)
-
-# print("conversation type:", type(conversations).__name__)
-# for turn in conversations:
-#     print(
-#         "role:",
-#         turn["role"],
-#         "content:",
-#         turn["content"],
-#     )
-
-# image_bytes = row["image_bytes"]
-
 
 required_vision_files = [
     "config.json",
@@ -107,76 +105,29 @@ required_vision_files = [
     "model.safetensors",#这是参数本体
 ]
 
-# for filename in required_vision_files:
-#     path = vision_root / filename
-#     print(f"vision file {filename}:", path.is_file())
-
-#检查权重是否正常
-# if weight_path.is_file():
-#     size_mb = weight_path.stat().st_size / 1024 / 1024
-#     print(f"[OK] base weight exists: {size_mb:.1f} MB")
-# else:
-#     print("[WARN] base weight is missing")
-#     print(
-#         "next model-forward step requires:",
-#         weight_path,
-#     )
 
 
 
 #################加载tokenizer 和processor ##############
 
-tokenizer = AutoTokenizer.from_pretrained(
-    str(tokenizer_root),
-    local_files_only=True,
-)
+# tokenizer = AutoTokenizer.from_pretrained(
+#     str(tokenizer_root),
+#     local_files_only=True,
+# )
 
-processor = SiglipImageProcessor.from_pretrained(
-    str(vision_root),
-    local_files_only=True,
-)
+# processor = SiglipImageProcessor.from_pretrained(
+#     str(vision_root),
+#     local_files_only=True,
+# )
 
-dataset = VLMDataset(
-    str(dataset_path),
-    tokenizer,
-    preprocess=processor,
-)
+# dataset = VLMDataset(
+#     str(dataset_path),
+#     tokenizer,
+#     preprocess=processor,
+# )
 
 
 input_ids, labels, image_data = dataset[0]
-# supervised_mask = labels != -100
-
-# print("supervised token count:", int(supervised_mask.sum()))
-# print("ignored token count:", int((~supervised_mask).sum()))
-
-# answer_token_ids = input_ids[supervised_mask].tolist()
-
-# print(
-#     "supervised text:",
-#     repr(tokenizer.decode(answer_token_ids)),
-# )
-
-# image_pad_id = tokenizer.convert_tokens_to_ids("<|image_pad|>")
-# image_pad_count = int((input_ids == image_pad_id).sum())
-
-# print("image pad token id:", image_pad_id)
-# print("image pad token count:", image_pad_count)
-
-
-
-
-# batch_input_ids, batch_labels, batch_images = vlm_collate_fn(
-#     [dataset[0], dataset[1]],
-# )#调用批处理函数，把两个样本拼成batch，在这里既dataset[0], dataset[1]
-
-# print("batch input_ids shape:", tuple(batch_input_ids.shape))
-# print("batch labels shape:", tuple(batch_labels.shape))
-
-# if hasattr(batch_images, "items"):
-#     for name, tensor in batch_images.items():
-#         print(f"batch_images[{name}] shape:", tuple(tensor.shape))#如果他是张量，则直接输出shape
-# else:
-#     print("batch images shape:", tuple(batch_images.shape))
 
 
 ################forward#######################
@@ -195,26 +146,35 @@ config = VLMConfig(
     num_hidden_layers=args.num_hidden_layers,
 )
 
-model = MiniMindVLM(
+
+model, _, _ = init_vlm_model(
     config,
+    from_weight=args.weight,
+    tokenizer_path=str(tokenizer_root),
     vision_model_path=str(vision_root),
+    save_dir=str(weight_root),
+    device=str(device),
+    freeze_llm=args.freeze_llm,
 )
-
-
-state_dict = torch.load(
-    weight_path,
-    map_location="cpu",
-)#导入权重
-
-missing_keys, unexpected_keys = model.load_state_dict(
-    state_dict,
-    strict=False,
-)
-
-print("missing key count:", len(missing_keys))
-print("unexpected key count:", len(unexpected_keys))
 
 model = model.to(device)
+trainable = [
+    (name, parameter)
+    for name, parameter in model.named_parameters()
+    if parameter.requires_grad
+]#列表中包含二元组
+
+trainable_count = sum(
+    parameter.numel()
+    for _, parameter in trainable
+)
+
+print("trainable tensors:", len(trainable))
+print("trainable parameters (M):", trainable_count / 1e6)
+print("first trainable name:", trainable[0][0])
+#统计可学习参数
+
+
 model.eval()
 
 one_input_ids = input_ids.unsqueeze(0).to(device)
@@ -235,3 +195,48 @@ with torch.inference_mode():
 print("forward logits shape:", tuple(output.logits.shape))
 print("forward loss:", float(output.loss))
 print("forward aux loss:", float(output.aux_loss))
+
+
+#根据输入参数判断是否训练
+if not args.train_step:
+    raise SystemExit(
+        "forward inspection finished; "
+        "add --train-step to run one optimizer update"
+    )
+
+model.train()
+
+optimizer=torch.optim.AdamW(
+    [parameter for _, parameter in trainable],
+    lr=args.learning_rate,
+)
+
+first_name,first_parameter=trainable[0]
+before_update=first_parameter.detach().clone()#复制一份第一个参数
+
+optimizer.zero_grad(set_to_none=True)
+
+train_output = model(
+    one_input_ids,
+    labels=one_labels,
+    pixel_values=one_images,
+)
+
+train_output.loss.backward()
+optimizer.step()#更新参数
+
+###############检查变化##############
+gradient_norm_sq = sum(
+    parameter.grad.detach().float().pow(2).sum()
+    for _, parameter in trainable
+    if parameter.grad is not None
+)
+
+mean_update = (
+    first_parameter.detach() - before_update
+).abs().mean()
+
+print("train loss:", float(train_output.loss))
+print("gradient norm:", float(torch.sqrt(gradient_norm_sq)))
+print(f"mean update for {first_name}:", float(mean_update))
+
