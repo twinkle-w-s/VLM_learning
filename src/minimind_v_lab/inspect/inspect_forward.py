@@ -204,7 +204,7 @@ model = MiniMindVLM(
 state_dict = torch.load(
     weight_path,
     map_location="cpu",
-)
+)#导入权重
 
 missing_keys, unexpected_keys = model.load_state_dict(
     state_dict,
@@ -224,7 +224,7 @@ one_images = {
     name: tensor.unsqueeze(0).to(device)
     for name, tensor in image_data.items()
 }
-
+#构造一条前向传播数据
 with torch.inference_mode():
     output = model(
         one_input_ids,
