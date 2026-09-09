@@ -103,8 +103,8 @@ def main() -> int:
     #读取path
     args = parser.parse_args()
 
-    metadata = pq.read_metadata(args.parquet_path)
-    available_columns = set(metadata.schema.names)
+    parquet_file = pq.ParquetFile(args.parquet_path)
+    available_columns = set(parquet_file.schema_arrow.names)
     missing_columns = REQUIRED_COLUMNS - available_columns
 
     if missing_columns:
@@ -120,21 +120,21 @@ def main() -> int:
         )
         return 2
 
-    table = pq.read_table(
-        args.parquet_path,
-        columns=sorted(REQUIRED_COLUMNS),
-    )
-
-    rows_to_check = min(args.max_rows, table.num_rows)
+    rows_to_check = min(args.max_rows, parquet_file.metadata.num_rows)
     error_counter = Counter()
     valid_rows = 0
 
-    for index in range(rows_to_check):
-        row = {
-            column: table[column][index].as_py()
-            for column in REQUIRED_COLUMNS
-        }
+    checked_rows = []
+    if rows_to_check > 0:
+        first_batch = next(
+            parquet_file.iter_batches(
+                batch_size=rows_to_check,
+                columns=sorted(REQUIRED_COLUMNS),
+            )
+        )
+        checked_rows = first_batch.to_pylist()
 
+    for row in checked_rows:
         errors = validate_row(row)
 
         if errors:
@@ -145,7 +145,7 @@ def main() -> int:
     report = {
         "valid": len(error_counter) == 0,
         "path": str(args.parquet_path),
-        "total_rows": table.num_rows,
+        "total_rows": parquet_file.metadata.num_rows,
         "rows_checked": rows_to_check,
         "valid_rows": valid_rows,
         "invalid_rows": rows_to_check - valid_rows,

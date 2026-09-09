@@ -99,7 +99,8 @@ def main() -> int:
         seed=args.seed,
     )
 
-    selected = selected[:args.limit]#截断，取前500条
+    if args.limit > 0:
+        selected = selected[:args.limit]
 
     args.output_path.parent.mkdir(
         parents=True,

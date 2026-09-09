@@ -53,7 +53,12 @@ def build_record(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("output_path", type=Path)
-    parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=1000,
+        help="最多写入多少条；0 表示写入全部空间问题",
+    )
 
     args = parser.parse_args()
 
@@ -80,7 +85,7 @@ def main() -> int:
         encoding="utf-8",
     ) as output_file:
         for question in questions:
-            if written >= args.limit:
+            if args.limit > 0 and written >= args.limit:
                 break
 
             if not is_spatial_question(question):

@@ -5,59 +5,11 @@ import json
 import random
 from pathlib import Path
 
-def read_jsonl(path: Path) -> list[dict]:
+def read_jsonl(path: Path):
     with path.open("r", encoding="utf-8") as file:
-        return [
-            json.loads(line)
-            for line in file
-            if line.strip()
-        ]
-
-def write_jsonl(records: list[dict], path: Path) -> None:
-    with path.open("w", encoding="utf-8") as file:
-        for record in records:
-            file.write(
-                json.dumps(record, ensure_ascii=False) + "\n"
-            )
-#按照图片划分
-def split_by_image(
-    records: list[dict],
-    val_ratio: float,
-    seed: int,
-) -> tuple[list[dict], list[dict]]:
-    image_names = sorted(
-        {record["image_filename"] for record in records}
-    )
-
-    random.Random(seed).shuffle(image_names)#打乱图像名，而非打乱问题
-
-    split_index = round(len(image_names) * (1 - val_ratio))
-    train_images = set(image_names[:split_index])
-
-    train_records = [
-        record
-        for record in records
-        if record["image_filename"] in train_images
-    ]
-
-    val_records = [
-        record
-        for record in records
-        if record["image_filename"] not in train_images
-    ]
-
-    train_image_names = {
-        record["image_filename"]
-        for record in train_records
-    }
-    val_image_names = {
-        record["image_filename"]
-        for record in val_records
-    }
-
-    assert not train_image_names & val_image_names#同一图像不能被泄露到两个集合
-
-    return train_records, val_records
+        for line in file:
+            if line.strip():
+                yield json.loads(line)
 
 def main() ->int:
     parser = argparse.ArgumentParser()
@@ -68,31 +20,43 @@ def main() ->int:
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
-    records = read_jsonl(args.input_path)
+    if not 0 < args.val_ratio < 1:
+        raise SystemExit("--val-ratio must be between 0 and 1")
 
-    train_records, val_records = split_by_image(
-        records,
-        val_ratio=args.val_ratio,
-        seed=args.seed,
+    image_names = sorted(
+        {
+            record["image_filename"]
+            for record in read_jsonl(args.input_path)
+        }
     )
+    random.Random(args.seed).shuffle(image_names)
+
+    split_index = round(len(image_names) * (1 - args.val_ratio))
+    train_images = set(image_names[:split_index])
+    val_images = set(image_names[split_index:])
+    assert not train_images & val_images
 
     args.train_path.parent.mkdir(parents=True, exist_ok=True)
     args.val_path.parent.mkdir(parents=True, exist_ok=True)
 
-    write_jsonl(train_records, args.train_path)
-    write_jsonl(val_records, args.val_path)
+    train_count = 0
+    val_count = 0
+    with args.train_path.open("w", encoding="utf-8") as train_file:
+        with args.val_path.open("w", encoding="utf-8") as val_file:
+            for record in read_jsonl(args.input_path):
+                serialized = json.dumps(record, ensure_ascii=False) + "\n"
+                if record["image_filename"] in train_images:
+                    train_file.write(serialized)
+                    train_count += 1
+                else:
+                    val_file.write(serialized)
+                    val_count += 1
 
-    print("total records:", len(records))
-    print("train records:", len(train_records))
-    print("val records:", len(val_records))
-    print(
-        "train images:",
-        len({x["image_filename"] for x in train_records}),
-    )
-    print(
-        "val images:",
-        len({x["image_filename"] for x in val_records}),
-    )
+    print("total records:", train_count + val_count)
+    print("train records:", train_count)
+    print("val records:", val_count)
+    print("train images:", len(train_images))
+    print("val images:", len(val_images))
 
     return 0
 
