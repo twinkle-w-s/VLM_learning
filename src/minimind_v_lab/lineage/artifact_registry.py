@@ -5,7 +5,8 @@
 # 2. 保存 artifact manifest
 # 3. 查询 artifact
 # 4. 判断 artifact 是否完整
-#
+
+# 对数据溯源的中间环节，保证每条数据能溯源到原数据
 # 第一版只使用 Python 标准库，不依赖数据库和第三方包。
 # 后续如果并发量增大，可以在不改变接口的前提下替换成 SQLite、
 # PostgreSQL 或对象存储上的 catalog。
