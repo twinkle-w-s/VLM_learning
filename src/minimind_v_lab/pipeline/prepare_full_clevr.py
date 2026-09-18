@@ -17,7 +17,8 @@ def run_step(label: str, command: list[str]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("output_root", type=Path)
-    parser.add_argument("--val-ratio", type=float, default=0.1)
+    parser.add_argument("--val-ratio", type=float, default=0.05)
+    parser.add_argument("--test-ratio", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
@@ -30,8 +31,10 @@ def main() -> int:
     annotated = manifest_dir / "spatial_all_annotated.jsonl"
     train = curated_dir / "spatial_train.jsonl"
     val = curated_dir / "spatial_val.jsonl"
+    test = curated_dir / "spatial_test.jsonl"
     recipe_train = curated_dir / "spatial_initial_recipe_train.jsonl"
     val_parquet = curated_dir / "spatial_val.parquet"
+    test_parquet = curated_dir / "spatial_test.parquet"
     recipe_parquet = curated_dir / "spatial_initial_recipe_train.parquet"
 
     python = sys.executable
@@ -58,12 +61,15 @@ def main() -> int:
         "split by image",
         [
             python,
-            str(project_root / "src/minimind_v_lab/manifest/split_by_image.py"),
-            str(annotated),
-            str(train),
-            str(val),
-            "--val-ratio",
-            str(args.val_ratio),
+        str(project_root / "src/minimind_v_lab/manifest/split_by_image_three_way.py"),
+        str(annotated),
+        str(train),
+        str(val),
+        str(test),
+        "--val-ratio",
+        str(args.val_ratio),
+        "--test-ratio",
+        str(args.test_ratio),
             "--seed",
             str(args.seed),
         ],
@@ -71,6 +77,7 @@ def main() -> int:
     for split_name, split_path in [
         ("train", train),
         ("validation", val),
+        ("test", test),
     ]:
         run_step(
             f"validate {split_name} manifest",
@@ -109,6 +116,15 @@ def main() -> int:
         ],
     )
     run_step(
+        "convert test parquet",
+        [
+            python,
+            str(project_root / "src/minimind_v_lab/convert/convert_manifest_to_parquet_streaming.py"),
+            str(test),
+            str(test_parquet),
+        ],
+    )
+    run_step(
         "convert recipe parquet",
         [
             python,
@@ -119,6 +135,7 @@ def main() -> int:
     )
     for parquet_name, parquet_path in [
         ("validation", val_parquet),
+        ("test", test_parquet),
         ("recipe", recipe_parquet),
     ]:
         run_step(
@@ -138,8 +155,10 @@ def main() -> int:
         annotated,
         train,
         val,
+        test,
         recipe_train,
         val_parquet,
+        test_parquet,
         recipe_parquet,
     ]:
         print(path)

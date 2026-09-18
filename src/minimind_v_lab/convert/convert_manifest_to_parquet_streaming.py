@@ -1,5 +1,5 @@
 # 这个脚本分批把全量 manifest 转成 MiniMind-V Parquet，避免图像字节耗尽内存。
-
+#流式处理，分批写入，不占用内存
 from __future__ import annotations
 
 import argparse

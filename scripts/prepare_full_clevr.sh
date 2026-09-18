@@ -11,6 +11,7 @@ cd "${PROJECT_ROOT}"
 
 python src/minimind_v_lab/pipeline/prepare_full_clevr.py \
   "${OUTPUT_ROOT}" \
-  --val-ratio 0.1 \
+  --val-ratio 0.05 \
+  --test-ratio 0.05 \
   --seed 42 \
   --limit 0
