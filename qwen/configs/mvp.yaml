@@ -5,11 +5,11 @@ output_root: "/data/${USER}/vlm_learning/qwen_mvp"
 data:
   clevr:
     train: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_train.jsonl"
-    val: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_val.jsonl"
-    test: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_test.jsonl"
+    val: "/data/${USER}/vlm_learning/experiments/clevr_spatial_v1_initial_recipe/data/val_image_holdout_5pct.jsonl"
+    test: "/data/${USER}/vlm_learning/experiments/clevr_spatial_v1_initial_recipe/data/test_image_holdout_5pct.jsonl"
     image_root: "/data/${USER}/vlm_learning/CLEVR_v1.0/images/train"
   replay:
-    vl_path: "/data/${USER}/vlm_learning/replay/raw/sft_i2t_1e279a8b.parquet"
+    vl_path: "/data/${USER}/vlm_learning/replay/raw/sft_i2t.parquet"
     text_path: null  # null 表示从 vl_path 中提取真正的 t2t
     image_root: null  # 内嵌 image_bytes 时不需要；旧版外置图片则填写
     max_scan_rows: 200000
