@@ -1,8 +1,9 @@
 """检查 Qwen MVP 的原始数据；--inspect 不写输出文件。"""
+from __future__ import annotations
 import hashlib
 import re
 from itertools import islice
-from __future__ import annotations
+
 import random
 import argparse
 import io
