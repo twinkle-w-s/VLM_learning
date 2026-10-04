@@ -1,0 +1,87 @@
+version: 1
+seed: 42
+output_root: "/data/${USER}/vlm_learning/qwen_mvp"
+
+data:
+  clevr:
+    train: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_train.jsonl"
+    val: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_val.jsonl"
+    test: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_test.jsonl"
+    image_root: "/data/${USER}/vlm_learning/CLEVR_v1.0/images/train"
+  replay:
+    vl_path: "/data/${USER}/vlm_learning/replay/raw/sft_i2t_1e279a8b.parquet"
+    text_path: null  # null 表示从 vl_path 中提取真正的 t2t
+    image_root: null  # 内嵌 image_bytes 时不需要；旧版外置图片则填写
+    max_scan_rows: 200000
+    val_fraction: 0.10
+  train_pool_size:
+    clevr: 5000
+    replay_vl: 2000
+    replay_text: 1000
+  bucket_fields: [task_type, difficulty]
+  min_bucket_train: 50
+
+model:
+  name_or_path: "Qwen/Qwen3-VL-4B-Instruct"
+  freeze_vision: true
+  freeze_aligner: true
+  lora_scope: llm_only
+  lora_rank: 16
+  lora_alpha: 32
+
+train:
+  rounds: 2
+  steps_per_round: 300
+  smoke_steps: 10
+  global_batch_size: 32
+  micro_batch_size: 1
+  learning_rate: 0.0001
+  max_length: 2048
+  max_pixels: 262144
+  bf16: true
+  gradient_checkpointing: true
+  num_workers: 2
+
+evaluation:
+  clevr_val_size: 500
+  replay_vl_val_size: 200
+  replay_text_val_size: 100
+  replay_short_answer_max_words: 3
+  probe_size:
+    clevr: 192
+    replay_vl: 48
+    replay_text: 16
+  batch_size: 1
+  qa_max_new_tokens: 32
+  mmstar:
+    dataset: "Lin-Chen/MMStar"
+    config: val
+    split: val
+    max_new_tokens: 8
+    feedback: false
+recipe:
+  source_ratios:
+    clevr: 0.80
+    replay_vl: 0.15
+    replay_text: 0.05
+  source_bounds:
+    clevr: [0.60, 0.85]
+    replay_vl: [0.10, 0.35]
+    replay_text: [0.05, 0.05]
+  max_repeats_per_sample: 4
+
+flywheel:
+  ema_beta: 0.60
+  target_accuracy: 0.80
+  eta_initial: 1.0
+  anneal_decay: 0.70
+  max_source_delta: 0.05
+  source_accuracy_gap: 0.01
+  min_source_val: 100
+  min_bucket_val: 20
+  min_accuracy_gain: 0.005
+  min_relative_nll_gain: 0.01
+  low_gain_patience: 2
+  bucket_prior_mix: 0.20
+  bucket_multiplier_min: 0.80
+  bucket_multiplier_max: 1.50
