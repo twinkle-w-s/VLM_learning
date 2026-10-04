@@ -1,5 +1,7 @@
 """检查 Qwen MVP 的原始数据；--inspect 不写输出文件。"""
-
+import hashlib
+import re
+from itertools import islice
 from __future__ import annotations
 import random
 import argparse
@@ -381,12 +383,462 @@ def prepare_clevr(cfg: dict) -> None:
     print("OUTPUT:", output)
     print("REPLAY_PENDING: 尚未准备 15% 图文和 5% 文字回放。")
 
+#将minifest格式的转化为qwen格式的SFT数据
+def replay_hash(value) -> str:
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+    return hashlib.sha256(value).hexdigest()
+
+
+def parse_replay_record(row: dict, max_words: int):
+    turns = row["conversations"]
+    if isinstance(turns, str):
+        turns = json.loads(turns)
+    if not isinstance(turns, list) or any(
+        not isinstance(t, dict) for t in turns
+    ):
+        return None, "invalid_dialogue"
+
+    roles = [t.get("role") for t in turns]
+    if roles not in (
+        ["user", "assistant"],
+        ["system", "user", "assistant"],
+    ):
+        return None, "unsupported_dialogue"
+    if any(not isinstance(t.get("content"), str) for t in turns):
+        return None, "invalid_content"
+    if any(
+        t.get("tools") or t.get("tool_calls") or t.get("functions")
+        for t in turns
+    ):
+        return None, "tool_sample"
+
+    messages = [
+        {
+            "role": t["role"],
+            "content": t["content"].replace(
+                "<|image_pad|>", "<image>"
+            ).strip(),
+        }
+        for t in turns
+    ]
+    user = next(
+        t["content"] for t in messages if t["role"] == "user"
+    )
+    answer = messages[-1]["content"]
+    if not user or not answer or "<image>" in answer:
+        return None, "invalid_qa"
+
+    images = row["image_bytes"]
+    images = images if isinstance(images, list) else [images]
+    images = [blob for blob in images if blob]
+    if len(images) > 1:
+        return None, "multi_image"
+
+    blob = images[0] if images else None
+    placeholder = False
+    if blob:
+        with Image.open(io.BytesIO(blob)) as image:
+            placeholder = (
+                image.size == (8, 8)
+                and image.convert("RGB").getextrema()
+                == ((0, 0), (0, 0), (0, 0))
+            )
+
+    marker_count = sum(
+        t["content"].count("<image>") for t in messages
+    )
+    if marker_count == 1 and "<image>" in user and blob and not placeholder:
+        source = "replay_vl"
+        image_id = replay_hash(blob)
+        group_id = "image:" + image_id
+    elif marker_count == 0 and (blob is None or placeholder):
+        source = "replay_text"
+        image_id = None
+        prompt = json.dumps(
+            messages[:-1], ensure_ascii=False, sort_keys=True
+        )
+        group_id = "text:" + replay_hash(prompt)
+        blob = None
+    else:
+        return None, "ambiguous_modality"
+
+    payload = json.dumps(
+        messages, ensure_ascii=False, sort_keys=True
+    )
+    short = (
+        source == "replay_vl"
+        and len(answer.split()) <= max_words
+        and re.fullmatch(
+            r"(?:[a-z]+(?:[ -][a-z]+){0,2}|\d+(?:\.\d+)?)",
+            answer.casefold().strip("."),
+        ) is not None
+    )
+    return {
+        "sample_id": "minimind_v:" + replay_hash(
+            group_id + "\n" + payload
+        ),
+        "source": source,
+        "group_id": group_id,
+        "image_id": image_id,
+        "bucket": source,
+        "answer": answer,
+        "scorable": bool(short),
+        "short_answer_candidate": bool(short),
+        "messages": messages,
+        "_image_bytes": blob,
+    }, "accepted"
+
+def iter_replay_rows(parquet, groups):
+    for group in groups:
+        offset = 0
+        for batch in parquet.iter_batches(
+            batch_size=128,
+            row_groups=[group],
+            columns=["conversations", "image_bytes"],
+        ):
+            for row in batch.to_pylist():
+                yield group, offset, row
+                offset += 1
+
+
+def collect_replay(cfg: dict):
+    options = cfg["data"]["replay"]
+    if options.get("text_path"):
+        raise ValueError(
+            "本轮仅从 vl_path 提取文字，不读取额外 text_path"
+        )
+
+    path = resolve_path(
+        options["vl_path"], "replay.vl_path"
+    ).resolve()
+    parquet = pq.ParquetFile(path)
+    missing = {
+        "conversations", "image_bytes"
+    } - set(parquet.schema_arrow.names)
+    if missing:
+        raise ValueError(f"replay 缺字段: {sorted(missing)}")
+
+    fraction = options["val_fraction"]
+    budget = options["max_scan_rows"]
+    if not 0 < fraction < 1 or budget <= 0:
+        raise ValueError(
+            "val_fraction 必须在 (0,1)，max_scan_rows 必须大于 0"
+        )
+
+    targets = {
+        "train_vl": cfg["data"]["train_pool_size"]["replay_vl"],
+        "val_vl": cfg["evaluation"]["replay_vl_val_size"],
+        "qa_val_vl": cfg["evaluation"]["replay_vl_val_size"],
+        "train_text": cfg["data"]["train_pool_size"]["replay_text"],
+        "val_text": cfg["evaluation"]["replay_text_val_size"],
+    }
+    if any(n <= 0 for n in targets.values()):
+        raise ValueError(
+            "replay 候选池和验证集目标数量必须大于 0"
+        )
+
+    pools = {name: [] for name in targets}
+    rngs = {
+        name: random.Random(cfg["seed"] + 200 + index)
+        for index, name in enumerate(targets)
+    }
+    groups = list(range(parquet.num_row_groups))
+    random.Random(cfg["seed"] + 201).shuffle(groups)
+    counts, seen_ids = Counter(), set()
+
+    for group, offset, raw in islice(
+        iter_replay_rows(parquet, groups), budget
+    ):
+        counts["scanned"] += 1
+        try:
+            item, reason = parse_replay_record(
+                raw,
+                cfg["evaluation"]["replay_short_answer_max_words"],
+            )
+        except (ValueError, TypeError, OSError):
+            item, reason = None, "parse_or_image_error"
+
+        if item is not None and item["sample_id"] in seen_ids:
+            item, reason = None, "duplicate"
+        counts[reason] += 1
+
+        if item is not None:
+            seen_ids.add(item["sample_id"])
+            item["origin"] = {
+                "row_group": group,
+                "offset": offset,
+            }
+
+            value = int(
+                replay_hash(
+                    f"{cfg['seed']}:{item['group_id']}"
+                )[:16],
+                16,
+            )
+            split = (
+                "val" if value / (1 << 64) < fraction
+                else "train"
+            )
+            item["split"] = split
+            modality = (
+                "vl" if item["source"] == "replay_vl"
+                else "text"
+            )
+            names = [f"{split}_{modality}"]
+            if split == "val" and item["short_answer_candidate"]:
+                names.append("qa_val_vl")
+
+            for name in names:
+                counts[name + "_seen"] += 1
+                reservoir_add(
+                    pools[name],
+                    item,
+                    counts[name + "_seen"],
+                    targets[name],
+                    rngs[name],
+                )
+
+        if counts["scanned"] % 25000 == 0:
+            print(
+                "REPLAY SCAN:", dict(counts), flush=True
+            )
+
+    return pools, {
+        "input_path": str(path),
+        "input_bytes": path.stat().st_size,
+        "input_rows": parquet.metadata.num_rows,
+        "row_groups": parquet.num_row_groups,
+        "scan_budget": budget,
+        "scan_counts": dict(counts),
+        "candidate_counts": {
+            name: len(rows) for name, rows in pools.items()
+        },
+    }
+
+def finalize_replay(pools: dict, cfg: dict, output: Path):
+    for name, target in (
+        (
+            "train_vl",
+            cfg["data"]["train_pool_size"]["replay_vl"],
+        ),
+        (
+            "val_vl",
+            cfg["evaluation"]["replay_vl_val_size"],
+        ),
+    ):
+        if len(pools[name]) < target:
+            raise ValueError(
+                f"{name} 不足: {len(pools[name])}/{target}"
+            )
+
+    use_text = (
+        len(pools["train_text"])
+        == cfg["data"]["train_pool_size"]["replay_text"]
+        and len(pools["val_text"])
+        == cfg["evaluation"]["replay_text_val_size"]
+    )
+    ratios = dict(cfg["recipe"]["source_ratios"])
+    bounds = {
+        key: list(value)
+        for key, value in cfg["recipe"]["source_bounds"].items()
+    }
+    if not use_text:
+        pools["train_text"], pools["val_text"] = [], []
+        transferred = ratios["replay_text"]
+        ratios["replay_vl"] += transferred
+        ratios["replay_text"] = 0.0
+        bounds["replay_vl"] = [
+            value + transferred
+            for value in bounds["replay_vl"]
+        ]
+        bounds["replay_text"] = [0.0, 0.0]
+
+    overlaps = {}
+    for modality in ("vl", "text"):
+        train_groups = {
+            item["group_id"]
+            for item in pools[f"train_{modality}"]
+        }
+        val = list(pools[f"val_{modality}"])
+        if modality == "vl":
+            val += pools["qa_val_vl"]
+        overlaps[modality] = len(
+            train_groups
+            & {item["group_id"] for item in val}
+        )
+    if any(overlaps.values()):
+        raise ValueError(f"replay 内部组泄漏: {overlaps}")
+
+    for index, modality in enumerate(("vl", "text")):
+        number = cfg["evaluation"]["probe_size"][
+            f"replay_{modality}"
+        ]
+        if modality == "text" and not use_text:
+            number = 0
+        if not 0 <= number <= len(pools[f"train_{modality}"]):
+            raise ValueError(f"{modality} probe 数量不合法")
+
+        pools[f"probe_{modality}"] = random.Random(
+            cfg["seed"] + 300 + index
+        ).sample(
+            pools[f"train_{modality}"], number
+        )
+
+    blobs = {
+        item["image_id"]: item["_image_bytes"]
+        for rows in pools.values()
+        for item in rows
+        if item["_image_bytes"]
+    }
+    image_paths = {}
+    for index, (image_id, blob) in enumerate(
+        blobs.items(), start=1
+    ):
+        with Image.open(io.BytesIO(blob)) as image:
+            image.load()
+            suffix = {
+                "JPEG": ".jpg",
+                "PNG": ".png",
+                "WEBP": ".webp",
+            }.get(image.format)
+
+        if suffix is None:
+            raise ValueError("入选图片格式不支持")
+        image_paths[image_id] = str(
+            output / "images" / (image_id + suffix)
+        )
+        if index % 1000 == 0:
+            print(
+                "REPLAY DECODED IMAGES:", index, flush=True
+            )
+
+    output.mkdir(parents=True, exist_ok=False)
+    (output / "images").mkdir()
+    for image_id, blob in blobs.items():
+        with Path(image_paths[image_id]).open("xb") as file:
+            file.write(blob)
+
+    for name, rows in pools.items():
+        for item in rows:
+            if item["image_id"] is not None:
+                item["images"] = [
+                    image_paths[item["image_id"]]
+                ]
+            item.pop("_image_bytes", None)
+        write_jsonl(output / f"{name}.jsonl", rows)
+
+    return use_text, ratios, bounds, overlaps, len(blobs)
+
+def prepare_replay(cfg: dict) -> None:
+    root = (
+        resolve_path(cfg["output_root"], "output_root").resolve()
+        / "manifests"
+    )
+    output = root / "replay"
+    if output.exists():
+        raise FileExistsError(
+            f"输出目录已存在，拒绝覆盖: {output}"
+        )
+
+    with (root / "clevr" / "report.json").open(
+        encoding="utf-8"
+    ) as file:
+        clevr_report = json.load(file)
+    if clevr_report["seed"] != cfg["seed"]:
+        raise ValueError("CLEVR 与 replay seed 不一致")
+
+    pools, stats = collect_replay(cfg)
+    use_text, ratios, bounds, overlaps, image_count = (
+        finalize_replay(pools, cfg, output)
+    )
+    reviewed = bool(
+        cfg["data"]["replay"].get("short_qa_reviewed", False)
+    )
+    accuracy_available = (
+        len(pools["qa_val_vl"])
+        >= cfg["flywheel"]["min_source_val"]
+    )
+
+    recipe = {
+        "version": 1,
+        "round": 1,
+        "seed": cfg["seed"],
+        "source_ratios": ratios,
+        "source_bounds": bounds,
+        "max_repeats_per_sample": (
+            cfg["recipe"]["max_repeats_per_sample"]
+        ),
+        "pool_paths": {
+            "clevr": str(root / "clevr" / "train.jsonl"),
+            "replay_vl": str(output / "train_vl.jsonl"),
+            "replay_text": (
+                str(output / "train_text.jsonl")
+                if use_text else None
+            ),
+        },
+        "clevr_bucket_counts": (
+            clevr_report["buckets"]["train_counts"]
+        ),
+        "outer_feedback_enabled": (
+            reviewed and accuracy_available
+        ),
+    }
+    report = {
+        "status": "REPLAY_READY",
+        **stats,
+        "output_counts": {
+            name: len(rows) for name, rows in pools.items()
+        },
+        "group_overlap_within_replay": overlaps,
+        "unique_exported_images": image_count,
+        "text_enabled": use_text,
+        "text_fallback_reason": (
+            None if use_text
+            else "insufficient_within_scan_budget"
+        ),
+        "effective_source_ratios": ratios,
+        "effective_source_bounds": bounds,
+        "short_qa_reviewed": reviewed,
+        "outer_feedback_enabled": (
+            recipe["outer_feedback_enabled"]
+        ),
+        "dedup_scope": (
+            "exact bytes for images; "
+            "exact normalized dialogue for samples"
+        ),
+    }
+
+    for name, content in (
+        ("recipe_initial.json", recipe),
+        ("report.json", report),
+    ):
+        with (output / name).open(
+            "x", encoding="utf-8"
+        ) as file:
+            json.dump(
+                content, file, ensure_ascii=False, indent=2
+            )
+            file.write("\n")
+
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    print("REPLAY PREPARE: PASS")
+    print("OUTPUT:", output)
+    if not recipe["outer_feedback_enabled"]:
+        print(
+            "外层准确率反馈暂关闭；内层 CLEVR 飞轮仍可运行。"
+        )
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=Path("qwen/configs/mvp.yaml"))
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("qwen/configs/mvp.yaml"),
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--inspect", action="store_true")
     mode.add_argument("--prepare-clevr", action="store_true")
+    mode.add_argument("--prepare-replay", action="store_true")
     args = parser.parse_args()
 
     with args.config.open(encoding="utf-8") as file:
@@ -398,7 +850,9 @@ def main() -> None:
         inspect_clevr(cfg)
         inspect_replay(cfg)
         print("INSPECT COMPLETED — 未写出训练数据。")
-    else:
+    elif args.prepare_clevr:
         prepare_clevr(cfg)
+    else:
+        prepare_replay(cfg)
 if __name__ == "__main__":
     main()
