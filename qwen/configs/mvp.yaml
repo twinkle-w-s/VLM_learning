@@ -4,9 +4,9 @@ output_root: "/data/${USER}/vlm_learning/qwen_mvp"
 
 data:
   clevr:
-    train: "/data/${USER}/vlm_learning/datasets/clevr/curated/spatial_train.jsonl"
-    val: "/data/${USER}/vlm_learning/experiments/clevr_spatial_v1_initial_recipe/data/val_image_holdout_5pct.jsonl"
-    test: "/data/${USER}/vlm_learning/experiments/clevr_spatial_v1_initial_recipe/data/test_image_holdout_5pct.jsonl"
+    train: "/data/${USER}/vlm_learning/datasets/clevr/curated/train.jsonl"
+    val: "/data/${USER}/vlm_learning/datasets/clevr/curated/val.jsonl"
+    test: "/data/${USER}/vlm_learning/datasets/clevr/curated/test.jsonl"
     image_root: "/data/${USER}/vlm_learning/CLEVR_v1.0/images/train"
   replay:
     vl_path: "/data/${USER}/vlm_learning/replay/raw/sft_i2t.parquet"
