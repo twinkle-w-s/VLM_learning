@@ -24,11 +24,15 @@ def resolve_path(value, name: str) -> Path:
 
 def inspect_clevr(cfg: dict) -> None:
     paths = cfg["data"]["clevr"]
+    
     image_root = resolve_path(paths["image_root"], "clevr.image_root")
     required = {"question", "answer", "image_filename", "task_type", "difficulty"}
 
     for split in ("train", "val", "test"):
         path = resolve_path(paths[split], f"clevr.{split}")
+        if split == "test" and not path.exists():
+            print(f"WARNING: test 缺失，本次 inspect 跳过: {path}")
+            continue
         with path.open(encoding="utf-8") as file:
             record = next(
                 (json.loads(line) for line in file if line.strip()), None
@@ -133,6 +137,7 @@ def summarize_replay_row(row: dict, max_words: int) -> dict:
 def inspect_replay(cfg: dict) -> None:
     replay = cfg["data"]["replay"]
     path = resolve_path(replay["vl_path"], "replay.vl_path")
+    
     if path.suffix.lower() != ".parquet":
         raise ValueError("本轮检查入口只支持方案 A 的 MiniMind-V Parquet")
 
