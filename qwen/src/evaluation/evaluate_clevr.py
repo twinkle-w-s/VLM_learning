@@ -1,8 +1,9 @@
-"""评估 Qwen3-VL 在固定 CLEVR val 上的生成准确率。
+"""评估 Qwen3-VL 在固定 CLEVR val 或训练 probe 上的生成准确率。
 
 不传 --checkpoint 时评估原始 Instruct 模型；传入则评估基础模型 + LoRA。
 默认只预览；--execute 才加载模型并写出预测与分桶指标。
 --limit 用于链路 smoke，不作为飞轮反馈。此文件暂不计算 NLL 或 MMStar。
+--subset probe 用于正确性历史，不把训练 probe 当作验证集。
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ def normalize_answer(text: str) -> str:
     )
 
 
-def load_val(path: Path, expected_rows: int) -> list[dict]:
+def load_val(path: Path, expected_rows: int, split: str = "val") -> list[dict]:
     rows = list(read_jsonl(path))
 
     if len(rows) != expected_rows:
@@ -44,9 +45,9 @@ def load_val(path: Path, expected_rows: int) -> list[dict]:
             )
         ids.add(row["sample_id"])
 
-        if row["source"] != "clevr" or row["split"] != "val":
+        if row["source"] != "clevr" or row["split"] != split:
             raise ValueError(
-                "本文件只评估准备后的 CLEVR val"
+                f"需要来源为 CLEVR、split 为 {split} 的记录"
             )
         if not row["scorable"] or not row["bucket"]:
             raise ValueError("缺少可评分标记或 bucket")
@@ -121,6 +122,7 @@ def main() -> None:
         default=Path("qwen/configs/mvp.yaml"),
     )
     parser.add_argument("--comparison-yes-no", action="store_true")
+    parser.add_argument("--subset", choices=("val", "probe"), default="val")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--output", default=None)
     parser.add_argument("--limit", type=int, default=None)
@@ -136,12 +138,15 @@ def main() -> None:
     model_path = resolve_path(
         cfg["model"]["name_or_path"], "model"
     )
-    val_path = (
-        root / "manifests" / "clevr" / "val.jsonl"
+    val_path = root / "manifests" / "clevr" / f"{args.subset}.jsonl"
+    expected_rows = (
+        cfg["evaluation"]["clevr_val_size"]
+        if args.subset == "val"
+        else cfg["evaluation"]["probe_size"]["clevr"]
     )
     rows = load_val(
-        val_path,
-        int(cfg["evaluation"]["clevr_val_size"]),
+        val_path, int(expected_rows),
+        split="val" if args.subset == "val" else "train",
     )
     comparison_yes_no = (
         args.comparison_yes_no
@@ -151,7 +156,8 @@ def main() -> None:
         rows = [rewrite_record(row)[0] for row in rows]
 
     # --limit 即使恰好覆盖所有行，也按 smoke 管理。
-    full_val = args.limit is None
+    complete_subset = args.limit is None
+    full_val = complete_subset and args.subset == "val"
     if args.limit is not None:
         if not 0 < args.limit <= len(rows):
             raise ValueError(
@@ -182,9 +188,13 @@ def main() -> None:
         resolve_path(args.output, "output")
         if args.output
         else (
-            root / "baseline" / "clevr"
-            if full_val
-            else root / "smoke" / "eval_base_clevr"
+            root / "baseline" / (
+                "clevr" if args.subset == "val" else "clevr_probe"
+            )
+            if complete_subset
+            else root / "smoke" / (
+                "eval_base_clevr" if args.subset == "val" else "eval_base_clevr_probe"
+            )
         )
     )
     if output.exists():
@@ -204,6 +214,9 @@ def main() -> None:
             str(checkpoint) if checkpoint else None
         ),
         "val_path": str(val_path),
+        "data_path": str(val_path),
+        "subset": args.subset,
+        "complete_subset": complete_subset,
         "evaluated_rows": len(rows),
         "full_val": full_val,
         "max_length": int(
@@ -376,7 +389,7 @@ def main() -> None:
                     r["correct"] for r in results
                 )
                 print(
-                    f"CLEVR val: {index}/{len(rows)}, "
+                    f"CLEVR {args.subset}: {index}/{len(rows)}, "
                     f"EM={correct / index:.4f}",
                     flush=True,
                 )
@@ -389,10 +402,11 @@ def main() -> None:
     metrics.update({
         "status": (
             "COMPLETE"
-            if full_val
+            if complete_subset
             else "SMOKE_COMPLETE"
         ),
         "feedback_eligible": full_val,
+        "probe_dynamics_available": complete_subset and args.subset == "probe",
         "protocol": protocol,
         "elapsed_seconds": round(
             time.perf_counter() - started, 2

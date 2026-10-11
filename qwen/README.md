@@ -153,7 +153,8 @@ qwen/src/
 ├── common/       # data_common.py、共用 prompt_policy.py
 ├── data/         # CLEVR/replay 准备、配方物化、全量准备入口
 ├── training/     # train_sft.py、旧提示实验入口、verify_lora.py
-├── evaluation/   # evaluate_clevr.py、nll_metrics.py、inspect_nll.py
+├── evaluation/   # CLEVR val/probe 生成评估、批量 NLL、mask 检查
+├── learning/     # 固定 probe 的跨轮 NLL/正确性/学习与遗忘统计
 └── diagnostics/  # 数据格式检查和历史 comparison 提示诊断
 ```
 
@@ -180,6 +181,11 @@ NLL 检查沿用模板监督范围，并兼容可选 system 消息与没有 imag
 ```bash
 python -m unittest discover -s qwen/tests -v
 ```
+
+跨轮学习动态已实现，文件职责、指标口径和 base→R1→R2 的服务器命令见
+[LEARNING_DYNAMICS.md](LEARNING_DYNAMICS.md)。使用 `configs/dynamics_full.yaml`
+登记已完成的 probe 评估，再运行 `python -m qwen.src.learning.collect_dynamics`。
+此部分不修改数据配方；仅有基础模型观察时状态为 `BASELINE_ONLY`。
 
 下面保留原 MVP 的后续规划；示意中的未来文件不代表已经实现。
 

@@ -1,0 +1,21 @@
+# 固定训练 probe 的观察历史；评估文件不得修改或重新抽样。
+# 只支持每轮重新建立 optimizer/scheduler，global_step 从 0 计数。
+# 本配置不启动任何训练，round 必须为连续的 0、1、2……。
+step_accounting: round_local_reset
+snapshots:
+  - tag: base
+    round: 0
+    nll_dir: "/data/${USER}/vlm_learning/qwen_full_v1/baseline/nll_probe"
+    clevr_dir: "/data/${USER}/vlm_learning/qwen_full_v1/baseline/clevr_probe"
+
+  # R1 的两项 probe 评估完成后再取消注释。
+  # - tag: round01
+  #   round: 1
+  #   nll_dir: "/data/${USER}/vlm_learning/qwen_full_v1/rounds/round01/eval/nll_probe"
+  #   clevr_dir: "/data/${USER}/vlm_learning/qwen_full_v1/rounds/round01/eval/clevr_probe"
+
+  # R2 同理；不从计划步数或没有保存的训练进度生成观察值。
+  # - tag: round02
+  #   round: 2
+  #   nll_dir: "/data/${USER}/vlm_learning/qwen_full_v1/rounds/round02/eval/nll_probe"
+  #   clevr_dir: "/data/${USER}/vlm_learning/qwen_full_v1/rounds/round02/eval/clevr_probe"

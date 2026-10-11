@@ -11,15 +11,14 @@ from __future__ import annotations
 import argparse
 import math
 
-import torch
-import torch.nn.functional as F
-
-
 def compute_answer_nll(
     logits: torch.Tensor,
     labels: torch.Tensor,
 ) -> list[dict]:
     """每个位置 t 的 logits 预测位置 t+1 的 label。"""
+    import torch
+    import torch.nn.functional as F
+
     if logits.ndim != 3 or labels.ndim != 2:
         raise ValueError(
             "需要 logits [B,L,V] 与 labels [B,L]"
@@ -117,6 +116,8 @@ def aggregate_nll(records: list[dict]) -> dict:
 
 
 def demo() -> None:
+    import torch
+
     # B=2：两条样本。
     # L=6：各 6 个位置。
     # V=5：词表大小为 5。
