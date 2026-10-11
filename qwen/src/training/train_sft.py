@@ -1,8 +1,10 @@
-"""启动 Qwen3-VL 的单卡 LoRA SFT。
+"""启动 Qwen3-VL 的单卡或单机多卡 DDP LoRA SFT。
 
 读取 mvp.yaml 和 round01 已验收的数据。
 默认只预览命令；--execute 才加载模型并训练。
 smoke 与 round1 分开保存，均从原始模型新建 LoRA，不覆盖旧输出。
+多卡保持有效 global batch 不变；--output-dir 可隔离新的训练尝试。
+console.log 保存子进程完整输出，process_result.json 保存正常退出时的返回码。
 """
 
 from __future__ import annotations
@@ -21,7 +23,9 @@ import yaml
 from qwen.src.common.data_common import read_jsonl, resolve_path
 
 
-def build_command(cfg: dict, mode: str) -> tuple[list[str], dict]:
+def build_command(
+    cfg: dict, mode: str, num_gpus: int = 1, output_dir=None,
+) -> tuple[list[str], dict]:
     """把项目 YAML 翻译为 ms-swift 4.5.3 的参数。"""
     train, model = cfg["train"], cfg["model"]
 
@@ -34,11 +38,16 @@ def build_command(cfg: dict, mode: str) -> tuple[list[str], dict]:
 
     micro = int(train["micro_batch_size"])
     global_batch = int(train["global_batch_size"])
-    if micro <= 0 or global_batch <= 0 or global_batch % micro:
+    if num_gpus <= 0:
+        raise ValueError("--num-gpus 必须为正整数")
+    if (
+        micro <= 0 or global_batch <= 0
+        or global_batch % (micro * num_gpus)
+    ):
         raise ValueError(
-            "单卡 global_batch_size 必须是 micro_batch_size 的正整数倍"
+            "global_batch_size 必须是 micro_batch_size × num_gpus 的正整数倍"
         )
-    accumulation = global_batch // micro
+    accumulation = global_batch // (micro * num_gpus)
 
     steps = int(
         train["smoke_steps"]
@@ -53,7 +62,7 @@ def build_command(cfg: dict, mode: str) -> tuple[list[str], dict]:
         model["name_or_path"], "model.name_or_path"
     )
     train_path = root / "rounds" / "round01" / "data" / "train.jsonl"
-    output = (
+    output = resolve_path(output_dir, "output_dir") if output_dir is not None else (
         root / "smoke" / "sft"
         if mode == "smoke"
         else root / "rounds" / "round01" / "sft"
@@ -130,13 +139,23 @@ def build_command(cfg: dict, mode: str) -> tuple[list[str], dict]:
     }
 
     # 使用当前 Python 环境，不调用其他环境中的 swift。
-    command = [sys.executable, "-m", "swift.cli.main", "sft"]
+    if num_gpus == 1:
+        command = [sys.executable, "-m", "swift.cli.main", "sft"]
+    else:
+        # 直接启动 Swift 的 SFT 模块，避免 cli.main 再次分派 torchrun。
+        command = [
+            sys.executable, "-m", "torch.distributed.run",
+            "--standalone", "--nnodes", "1", "--nproc_per_node", str(num_gpus),
+            "--module", "swift.cli.sft",
+        ]
+        # 本配置只有 LLM LoRA 可训练；配合 gradient checkpointing。
+        options["ddp_find_unused_parameters"] = "false"
     for key, value in options.items():
         command.extend([f"--{key}", str(value)])
 
     summary = {
         "mode": mode,
-        "world_size": 1,
+        "world_size": num_gpus,
         "micro_batch_size": micro,
         "gradient_accumulation_steps": accumulation,
         "global_batch_size": global_batch,
@@ -159,12 +178,24 @@ def main() -> None:
     parser.add_argument(
         "--mode", choices=["smoke", "round1"], default="smoke"
     )
+    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--micro-batch-size", type=int, default=None)
+    parser.add_argument("--smoke-steps", type=int, default=None)
+    parser.add_argument("--output-dir", default=None)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
 
     with args.config.open(encoding="utf-8") as file:
         cfg = yaml.safe_load(file)
-    command, summary = build_command(cfg, args.mode)
+    if args.micro_batch_size is not None:
+        cfg["train"]["micro_batch_size"] = args.micro_batch_size
+    if args.smoke_steps is not None:
+        if args.mode != "smoke":
+            raise ValueError("--smoke-steps 只能用于 --mode smoke")
+        cfg["train"]["smoke_steps"] = args.smoke_steps
+    command, summary = build_command(
+        cfg, args.mode, num_gpus=args.num_gpus, output_dir=args.output_dir,
+    )
 
     # 复用已物化、已验收的数据，不重新处理原始数据。
     train_path = Path(summary["train_path"])
@@ -207,11 +238,15 @@ def main() -> None:
         print("PREVIEW ONLY：未加载模型、未创建输出、未启动训练。")
         return
 
-    # 真实执行前要求只暴露一张获分配的 GPU。
+    # 真实执行前要求显式指定获分配的卡，不自动占用所有可见 GPU。
     visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
-    if not visible.strip() or "," in visible:
+    devices = [device.strip() for device in visible.split(",")]
+    if (
+        len(devices) != args.num_gpus or any(not device or device == "-1" for device in devices)
+        or len(set(devices)) != len(devices)
+    ):
         raise ValueError(
-            "请通过 CUDA_VISIBLE_DEVICES 指定一张获分配的 GPU"
+            f"请通过 CUDA_VISIBLE_DEVICES 指定 {args.num_gpus} 张不同的获分配 GPU"
         )
     if version("ms-swift") != "4.5.3":
         raise RuntimeError(
@@ -231,16 +266,21 @@ def main() -> None:
 
     import torch
 
-    if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
-        raise RuntimeError("需要恰好一张可见 CUDA GPU")
+    if not torch.cuda.is_available() or torch.cuda.device_count() != args.num_gpus:
+        raise RuntimeError(f"需要恰好 {args.num_gpus} 张可见 CUDA GPU")
     if not torch.cuda.is_bf16_supported():
         raise RuntimeError("当前 GPU 不支持本版要求的 BF16")
 
     # 不继承旧的多机/多进程启动配置。
     env = os.environ.copy()
-    env.pop("NPROC_PER_NODE", None)
-    env.pop("NNODES", None)
+    for key in (
+        "NPROC_PER_NODE", "NNODES", "NODE_RANK", "MASTER_ADDR", "MASTER_PORT",
+        "RANK", "LOCAL_RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE",
+    ):
+        env.pop(key, None)
     env["PYTHONUNBUFFERED"] = "1"
+    env["CUDA_VISIBLE_DEVICES"] = ",".join(devices)
+    env["SWIFT_SINGLE_DEVICE_MODE"] = "0"
 
     output.mkdir(parents=True, exist_ok=False)
     with (output / "launch.json").open("x", encoding="utf-8") as file:
@@ -258,7 +298,23 @@ def main() -> None:
         file.write("\n")
 
     # 无 shell；失败不会打印完成信息，也不自动覆盖旧输出重试。
-    subprocess.run(command, env=env, check=True)
+    with (output / "console.log").open("x", encoding="utf-8") as log:
+        log.write("COMMAND: " + shlex.join(command) + "\n")
+        log.flush()
+        with subprocess.Popen(
+            command, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", bufsize=1,
+        ) as process:
+            for line in process.stdout:
+                log.write(line)
+                log.flush()
+                print(line, end="", flush=True)
+            returncode = process.wait()
+    with (output / "process_result.json").open("x", encoding="utf-8") as file:
+        json.dump({"returncode": returncode}, file)
+        file.write("\n")
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode, command)
     print(
         "SFT PROCESS FINISHED：下一步验收 adapter 保存与重新加载。"
     )

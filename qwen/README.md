@@ -171,6 +171,10 @@ python -m qwen.src.evaluation.nll_metrics --demo
 `train_sft` 默认只预览；`--execute` 才启动训练。`diagnostics.diagnose` 是历史一次性
 诊断，直接执行会读取旧 baseline 并加载模型，不是普通的 `--help` 检查入口。
 
+`train_sft` 现已支持单机多卡 DDP：`--num-gpus 8 --micro-batch-size 2` 在有效
+batch=32 时自动累积2次；`--output-dir` 隔离新尝试并保留旧目录。完整步骤和
+日志说明见 [DDP_TRAINING.md](DDP_TRAINING.md)。实际执行需明确指定已获分配的GPU。
+
 共用 `prompt_policy.rewrite_record` 可以重复应用，且不改变答案、图片、其他任务或
 replay。数据准备与评估读取 `prompt_policy: comparison_yes_no_v1` 时使用同一规则；
 未配置该字段的旧 MVP 仍保持原提示，评估也可通过 `--comparison-yes-no` 显式选择。
