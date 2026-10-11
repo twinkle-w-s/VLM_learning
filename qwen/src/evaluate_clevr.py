@@ -6,7 +6,7 @@
 """
 
 from __future__ import annotations
-
+from train_round1_typed import rewrite_record
 import argparse
 import json
 import os
@@ -120,6 +120,7 @@ def main() -> None:
         type=Path,
         default=Path("qwen/configs/mvp.yaml"),
     )
+    parser.add_argument("--comparison-yes-no", action="store_true")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--output", default=None)
     parser.add_argument("--limit", type=int, default=None)
@@ -142,6 +143,8 @@ def main() -> None:
         val_path,
         int(cfg["evaluation"]["clevr_val_size"]),
     )
+    if args.comparison_yes_no:
+        rows = [rewrite_record(row)[0] for row in rows]
 
     # --limit 即使恰好覆盖所有行，也按 smoke 管理。
     full_val = args.limit is None
@@ -187,6 +190,11 @@ def main() -> None:
 
     protocol = {
         "metric": "clevr_normalized_em_v1",
+        "prompt_policy": (
+            "comparison_yes_no_v1"
+            if args.comparison_yes_no
+            else "original_v1"
+        ),
         "model_path": str(model_path),
         "checkpoint": (
             str(checkpoint) if checkpoint else None
