@@ -123,12 +123,19 @@ def score_one(engine, row: dict) -> dict:
     ]:
         raise ValueError("需要单轮 user/assistant 样本")
 
+    # 纯文本没有图片；图文样本仍要求存在 images 字段。
+    image_paths = (
+        []
+        if row["source"] == "replay_text"
+        else row["images"]
+    )
+
     template = engine.template
     encoded = template.encode({
         "messages": row["messages"],
         "images": [
             str(resolve_path(path, "sample.image"))
-            for path in row["images"]
+            for path in image_paths
         ],
     })
     batch = template.data_collator([encoded])
