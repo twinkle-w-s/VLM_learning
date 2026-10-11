@@ -13,8 +13,8 @@ from itertools import islice
 
 import pyarrow.parquet as pq
 
-from data_common import reservoir_add, resolve_path
-from replay_records import (
+from qwen.src.common.data_common import reservoir_add, resolve_path
+from qwen.src.data.replay_records import (
     iter_replay_rows,
     parse_replay_record,
     replay_hash,

@@ -6,7 +6,6 @@
 """
 
 from __future__ import annotations
-from train_round1_typed import rewrite_record
 import argparse
 import json
 import os
@@ -17,7 +16,8 @@ from pathlib import Path
 
 import yaml
 
-from data_common import read_jsonl, resolve_path
+from qwen.src.common.data_common import read_jsonl, resolve_path
+from qwen.src.common.prompt_policy import rewrite_record
 
 
 def normalize_answer(text: str) -> str:
@@ -143,7 +143,11 @@ def main() -> None:
         val_path,
         int(cfg["evaluation"]["clevr_val_size"]),
     )
-    if args.comparison_yes_no:
+    comparison_yes_no = (
+        args.comparison_yes_no
+        or cfg.get("prompt_policy") == "comparison_yes_no_v1"
+    )
+    if comparison_yes_no:
         rows = [rewrite_record(row)[0] for row in rows]
 
     # --limit 即使恰好覆盖所有行，也按 smoke 管理。
@@ -192,7 +196,7 @@ def main() -> None:
         "metric": "clevr_normalized_em_v1",
         "prompt_policy": (
             "comparison_yes_no_v1"
-            if args.comparison_yes_no
+            if comparison_yes_no
             else "original_v1"
         ),
         "model_path": str(model_path),

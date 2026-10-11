@@ -14,8 +14,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from data_common import resolve_path, write_jsonl
-from replay_sampling import collect_replay
+from qwen.src.common.data_common import resolve_path, write_jsonl
+from qwen.src.data.replay_sampling import collect_replay
 
 
 def finalize_replay(

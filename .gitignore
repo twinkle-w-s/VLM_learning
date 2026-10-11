@@ -10,6 +10,8 @@ venv/
 
 # Datasets and generated artifacts
 data/
+!qwen/src/data/
+!qwen/src/data/*.py
 checkpoints/
 outputs/
 logs/

@@ -14,7 +14,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from data_common import (
+from qwen.src.common.prompt_policy import rewrite_record
+from qwen.src.common.data_common import (
     read_jsonl,
     reservoir_add,
     resolve_path,
@@ -94,6 +95,8 @@ def select_clevr(cfg: dict):
             item = make_clevr_record(
                 row, split, image_root
             )
+            if cfg.get("prompt_policy") == "comparison_yes_no_v1":
+                item = rewrite_record(item)[0]
             if item["sample_id"] in seen_ids:
                 raise ValueError(
                     f"源清单出现重复 sample_id: {item['sample_id']}"

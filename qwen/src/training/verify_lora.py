@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from data_common import read_jsonl, resolve_path
+from qwen.src.common.data_common import read_jsonl, resolve_path
 
 
 def inspect_adapter(cfg: dict, checkpoint: Path) -> dict:

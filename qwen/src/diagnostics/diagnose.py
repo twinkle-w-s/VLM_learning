@@ -8,16 +8,14 @@
 
 import json
 import os
-import sys
 from collections import Counter
 from importlib.metadata import version
 from pathlib import Path
 
 import yaml
 
-sys.path.insert(0, str(Path("qwen/src").resolve()))
-from data_common import read_jsonl, resolve_path
-from evaluate_clevr import normalize_answer
+from qwen.src.common.data_common import read_jsonl, resolve_path
+from qwen.src.evaluation.evaluate_clevr import normalize_answer
 
 
 # 1. 读取原 baseline，确保比较的是同一个模型、同一批题。

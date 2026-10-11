@@ -3,7 +3,7 @@
 输入：模型 logits [B, L, V] 和模板生成的 labels [B, L]。
 labels=-100 的 prompt/image/pad 不计分；使用 causal shift。
 输出每条样本的 NLL 总和、有效 token 数、平均 NLL，以及 token 加权汇总。
-只提供度量函数，不加载模型、不读取数据、不训练。
+只提供度量函数，供评估子包共用；不加载模型、不读取数据、不训练。
 """
 
 from __future__ import annotations

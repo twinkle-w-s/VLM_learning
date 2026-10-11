@@ -142,7 +142,48 @@ RTX 4090 没有 NVLink；PCIe 链路、NUMA、P2P 和 CPU 图像处理会影响�
 
 默认 BF16、gradient checkpointing、图片像素上限和短答案输出；初始 sequence length=2048、learning rate=1e-4，检查 replay 答案截断并排除完全无监督 token 的样本。像素/token 上限用安装版本支持的参数明确记录，不猜 CLI 名称。FlashAttention 只有现成可用时开启，避免第一版耗在编译。推理/训练遵守 Qwen processor 的图片处理方式，不复制 MiniMind-V 图片预处理。
 
-## 待实现目录
+## 当前代码目录与启动方式
+
+2026-10-11 已将原来的平铺脚本迁移为包。以下命令必须从项目根目录执行；
+旧的 `python qwen/src/xxx.py` 不再是启动方式。Git 同步包含文件迁移，服务器
+拉取后不需要额外运行 `organize_src.py`。数据和 checkpoint 的路径不因代码迁移而改变。
+
+```text
+qwen/src/
+├── common/       # data_common.py、共用 prompt_policy.py
+├── data/         # CLEVR/replay 准备、配方物化、全量准备入口
+├── training/     # train_sft.py、旧提示实验入口、verify_lora.py
+├── evaluation/   # evaluate_clevr.py、nll_metrics.py、inspect_nll.py
+└── diagnostics/  # 数据格式检查和历史 comparison 提示诊断
+```
+
+```bash
+python -m qwen.src.data.prepare_data --config qwen/configs/mvp.yaml --inspect
+python -m qwen.src.data.materialize_recipe --config qwen/configs/mvp.yaml
+python -m qwen.src.training.train_sft --config qwen/configs/mvp.yaml --mode smoke
+python -m qwen.src.training.verify_lora --help
+python -m qwen.src.evaluation.evaluate_clevr --help
+python -m qwen.src.evaluation.inspect_nll --help
+python -m qwen.src.evaluation.nll_metrics --demo
+```
+
+`train_sft` 默认只预览；`--execute` 才启动训练。`diagnostics.diagnose` 是历史一次性
+诊断，直接执行会读取旧 baseline 并加载模型，不是普通的 `--help` 检查入口。
+
+共用 `prompt_policy.rewrite_record` 可以重复应用，且不改变答案、图片、其他任务或
+replay。数据准备与评估读取 `prompt_policy: comparison_yes_no_v1` 时使用同一规则；
+未配置该字段的旧 MVP 仍保持原提示，评估也可通过 `--comparison-yes-no` 显式选择。
+NLL 检查沿用模板监督范围，并兼容可选 system 消息与没有 images 字段的文字 replay。
+
+本地迁移测试（不需要 Torch/GPU）：
+
+```bash
+python -m unittest discover -s qwen/tests -v
+```
+
+下面保留原 MVP 的后续规划；示意中的未来文件不代表已经实现。
+
+## 原 MVP 后续规划目录
 
 ```text
 qwen/

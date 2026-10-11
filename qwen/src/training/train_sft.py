@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from data_common import read_jsonl, resolve_path
+from qwen.src.common.data_common import read_jsonl, resolve_path
 
 
 def build_command(cfg: dict, mode: str) -> tuple[list[str], dict]:

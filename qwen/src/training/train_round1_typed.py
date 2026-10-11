@@ -18,40 +18,9 @@ from pathlib import Path
 
 import yaml
 
-from data_common import read_jsonl, resolve_path, write_jsonl
-from train_sft import build_command
-
-
-OLD_SUFFIX = "Answer with a single word or number."
-NEW_SUFFIX = (
-    "Answer with exactly yes or no. "
-    "Do not output a number or explanation."
-)
-
-
-def rewrite_record(item: dict) -> tuple[dict, bool]:
-    """只根据任务标签改 comparison，不读取答案来选择提示。"""
-    row = copy.deepcopy(item)
-    changed = (
-        row["source"] == "clevr"
-        and row["task_type"] == "comparison"
-    )
-
-    if changed:
-        message = row["messages"][0]
-        if (
-            message["role"] != "user"
-            or not message["content"].endswith(OLD_SUFFIX)
-        ):
-            raise ValueError(
-                f"comparison 提示格式异常：{row['sample_id']}"
-            )
-        message["content"] = (
-            message["content"][:-len(OLD_SUFFIX)]
-            + NEW_SUFFIX
-        )
-
-    return row, changed
+from qwen.src.common.data_common import read_jsonl, resolve_path, write_jsonl
+from qwen.src.common.prompt_policy import NEW_SUFFIX, rewrite_record
+from qwen.src.training.train_sft import build_command
 
 
 def main() -> None:
@@ -217,13 +186,9 @@ def main() -> None:
         )
 
     # 复用已通过 smoke 的启动入口和环境检查。
-    launcher = (
-        Path(__file__).resolve()
-        .with_name("train_sft.py")
-    )
     subprocess.run([
         sys.executable,
-        str(launcher),
+        "-m", "qwen.src.training.train_sft",
         "--config", str(run_config_path),
         "--mode", "round1",
         "--execute",

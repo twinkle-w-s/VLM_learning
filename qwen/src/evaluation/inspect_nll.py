@@ -18,8 +18,8 @@ from pathlib import Path
 
 import yaml
 
-from data_common import read_jsonl, resolve_path
-from train_round1_typed import rewrite_record
+from qwen.src.common.data_common import read_jsonl, resolve_path
+from qwen.src.common.prompt_policy import rewrite_record
 
 
 def select_examples(root: Path) -> list[dict]:
@@ -87,7 +87,7 @@ def inspect_labels(batch, tokenizer, model_config, row) -> dict:
     body_text = tokenizer.decode(
         token_ids, skip_special_tokens=True
     ).strip()
-    reference = row["messages"][1]["content"].strip()
+    reference = row["messages"][-1]["content"].strip()
 
     if body_text != reference:
         raise ValueError(
@@ -114,13 +114,14 @@ def inspect_labels(batch, tokenizer, model_config, row) -> dict:
 def score_one(engine, row: dict) -> dict:
     import torch
 
-    from nll_metrics import compute_answer_nll
+    from qwen.src.evaluation.nll_metrics import compute_answer_nll
     from swift.utils import to_device
 
     row = copy.deepcopy(row)
-    if [m["role"] for m in row["messages"]] != [
-        "user", "assistant"
-    ]:
+    if [m["role"] for m in row["messages"]] not in (
+        ["user", "assistant"],
+        ["system", "user", "assistant"],
+    ):
         raise ValueError("需要单轮 user/assistant 样本")
 
     # 纯文本没有图片；图文样本仍要求存在 images 字段。
@@ -221,7 +222,11 @@ def main() -> None:
     )
     examples = select_examples(root)
 
-    if args.comparison_yes_no:
+    comparison_yes_no = (
+        args.comparison_yes_no
+        or cfg.get("prompt_policy") == "comparison_yes_no_v1"
+    )
+    if comparison_yes_no:
         examples = [
             rewrite_record(row)[0] for row in examples
         ]
@@ -230,7 +235,7 @@ def main() -> None:
         "model_path": str(model_path),
         "prompt_policy": (
             "comparison_yes_no_v1"
-            if args.comparison_yes_no
+            if comparison_yes_no
             else "original_v1"
         ),
         "samples": [

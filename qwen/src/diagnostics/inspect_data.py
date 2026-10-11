@@ -13,7 +13,7 @@ from collections import Counter
 import pyarrow.parquet as pq
 from PIL import Image
 
-from data_common import resolve_path
+from qwen.src.common.data_common import resolve_path
 
 
 def inspect_clevr(cfg: dict) -> None:

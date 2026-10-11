@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from data_common import read_jsonl, resolve_path, write_jsonl
+from qwen.src.common.data_common import read_jsonl, resolve_path, write_jsonl
 
 
 def allocate_counts(total: int, weights: dict) -> dict:

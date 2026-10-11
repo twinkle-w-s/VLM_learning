@@ -1,7 +1,7 @@
 """Qwen MVP 数据准备命令行入口。
 
 保留 --inspect、--prepare-clevr、--prepare-replay 及原有输出格式。
-从项目根目录执行；新代码建议从 data_common 导入公共工具。
+从项目根目录执行 python -m qwen.src.data.prepare_data。
 """
 
 from __future__ import annotations
@@ -11,11 +11,9 @@ from pathlib import Path
 
 import yaml
 
-# 兼容此前 materialize_recipe.py 从 prepare_data 导入公共工具的写法。
-from data_common import read_jsonl, resolve_path, write_jsonl
-from inspect_data import inspect_clevr, inspect_replay
-from prepare_clevr import prepare_clevr
-from prepare_replay import prepare_replay
+from qwen.src.diagnostics.inspect_data import inspect_clevr, inspect_replay
+from qwen.src.data.prepare_clevr import prepare_clevr
+from qwen.src.data.prepare_replay import prepare_replay
 
 
 def main() -> None:
