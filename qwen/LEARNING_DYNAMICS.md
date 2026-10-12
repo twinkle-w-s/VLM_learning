@@ -71,6 +71,10 @@ CLEVR 样本，`scored_n` 显示分母；replay 不计算 EM，其事件计数�
 不能用 CLEVR 与 replay 的 NLL 大小直接排序能力；overall NLL 也可能被长回答主导。
 probe 的小桶统计用于描述，不自动取得 val 的反馈资格。
 
+生成评估支持 `--batch-size` 加速 val，但学习动态要求各轮生成协议中的 batch size
+相同。当前 base probe 以 batch=1 建立，后续 probe 继续用默认1；不要直接将
+batch=4 的 probe 混入已有历史。NLL 评估仍是原来的逐条计算。
+
 ## 3. 历史与步数口径
 
 当前只支持 `step_accounting: round_local_reset`：每轮加载上一轮 adapter 权重，

@@ -4,6 +4,7 @@
 默认只预览；--execute 才加载模型并写出预测与分桶指标。
 --limit 用于链路 smoke，不作为飞轮反馈。此文件暂不计算 NLL 或 MMStar。
 --subset probe 用于正确性历史，不把训练 probe 当作验证集。
+--batch-size 控制单卡生成批量，默认 1；不进行梯度累积或参数更新。
 """
 
 from __future__ import annotations
@@ -126,8 +127,11 @@ def main() -> None:
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--output", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size 必须为正整数")
 
     with args.config.open(encoding="utf-8") as file:
         cfg = yaml.safe_load(file)
@@ -229,7 +233,7 @@ def main() -> None:
             cfg["evaluation"]["qa_max_new_tokens"]
         ),
         "temperature": 0,
-        "batch_size": 1,
+        "batch_size": args.batch_size,
         "torch_dtype": "bfloat16",
         "attn_impl": "sdpa",
         "output": str(output),
@@ -292,7 +296,7 @@ def main() -> None:
         torch_dtype=torch.bfloat16,
         attn_impl="sdpa",
         device_map={"": "cuda:0"},
-        max_batch_size=1,
+        max_batch_size=args.batch_size,
     )
     engine.template.max_length = (
         protocol["max_length"]
@@ -318,73 +322,77 @@ def main() -> None:
     with (output / "predictions.jsonl").open(
         "x", encoding="utf-8"
     ) as file:
-        for index, row in enumerate(rows, start=1):
-            request = InferRequest(
-                # 只输入问题，不输入 assistant 标准答案。
-                messages=[
-                    dict(row["messages"][0])
-                ],
-                images=[
-                    str(
-                        resolve_path(
-                            row["images"][0],
-                            "val.image",
+        for start in range(0, len(rows), args.batch_size):
+            batch = rows[start:start + args.batch_size]
+            requests = [
+                InferRequest(
+                    # 只输入问题，不输入 assistant 标准答案。
+                    messages=[dict(row["messages"][0])],
+                    images=[
+                        str(
+                            resolve_path(
+                                row["images"][0],
+                                "val.image",
+                            )
                         )
-                    )
-                ],
-            )
+                    ],
+                )
+                for row in batch
+            ]
 
             with torch.inference_mode():
-                response = engine.infer(
-                    [request], request_cfg
-                )[0]
+                responses = engine.infer(requests, request_cfg, use_tqdm=False)
+            if len(responses) != len(batch):
+                raise RuntimeError("批量生成响应数量与输入不一致")
 
-            if isinstance(response, Exception):
-                raise response
+            for row, response in zip(batch, responses):
+                if isinstance(response, Exception):
+                    raise response
 
-            prediction = (
-                response.choices[0].message.content
-            )
-            if not isinstance(prediction, str):
-                raise TypeError(
-                    "生成结果不是文本"
+                prediction = (
+                    response.choices[0].message.content
+                )
+                if not isinstance(prediction, str):
+                    raise TypeError(
+                        "生成结果不是文本"
+                    )
+
+                normalized = normalize_answer(
+                    prediction
+                )
+                target = normalize_answer(
+                    str(row["answer"])
                 )
 
-            normalized = normalize_answer(
-                prediction
-            )
-            target = normalize_answer(
-                str(row["answer"])
-            )
+                result = {
+                    "sample_id": row["sample_id"],
+                    "bucket": row["bucket"],
+                    "task_type": row["task_type"],
+                    "difficulty": row["difficulty"],
+                    "question": (
+                        row["messages"][0]["content"]
+                    ),
+                    "image": row["images"][0],
+                    "reference": str(row["answer"]),
+                    "prediction": prediction,
+                    "normalized_prediction": normalized,
+                    "normalized_reference": target,
+                    "correct": normalized == target,
+                    "finish_reason": (
+                        response.choices[0].finish_reason
+                    ),
+                }
+                results.append(result)
 
-            result = {
-                "sample_id": row["sample_id"],
-                "bucket": row["bucket"],
-                "task_type": row["task_type"],
-                "difficulty": row["difficulty"],
-                "question": (
-                    row["messages"][0]["content"]
-                ),
-                "image": row["images"][0],
-                "reference": str(row["answer"]),
-                "prediction": prediction,
-                "normalized_prediction": normalized,
-                "normalized_reference": target,
-                "correct": normalized == target,
-                "finish_reason": (
-                    response.choices[0].finish_reason
-                ),
-            }
-            results.append(result)
+                file.write(
+                    json.dumps(
+                        result, ensure_ascii=False
+                    ) + "\n"
+                )
+                file.flush()
 
-            file.write(
-                json.dumps(
-                    result, ensure_ascii=False
-                ) + "\n"
-            )
-            file.flush()
-
-            if index % 25 == 0 or index == len(rows):
+            index = start + len(batch)
+            if index // 25 != start // 25 or index == len(rows):
                 correct = sum(
                     r["correct"] for r in results
                 )

@@ -175,6 +175,14 @@ python -m qwen.src.evaluation.nll_metrics --demo
 batch=32 时自动累积2次；`--output-dir` 隔离新尝试并保留旧目录。完整步骤和
 日志说明见 [DDP_TRAINING.md](DDP_TRAINING.md)。实际执行需明确指定已获分配的GPU。
 
+`evaluate_clevr --batch-size 4` 支持单卡批量生成，默认仍为1。先用 `--limit 64`
+和独立 smoke 输出目录短测，再去掉 limit 做完整 val，完整结果另存新目录。
+此处 batch 是同时生成的问题数，不做梯度累积。图片预算、提示和 EM 规则不变；
+实际显存和加速比在服务器测量，OOM 时降低 batch，不自动跳过样本。
+不同 batch 的 padding/数值路径可能造成少量预测差异，建议在同一 checkpoint 的
+固定短测样本上对比 batch=1/4。已有跨轮 probe 历史要求 batch 一致，继续使用默认1；
+此改动不加速逐条计算的 `evaluate_nll`。
+
 共用 `prompt_policy.rewrite_record` 可以重复应用，且不改变答案、图片、其他任务或
 replay。数据准备与评估读取 `prompt_policy: comparison_yes_no_v1` 时使用同一规则；
 未配置该字段的旧 MVP 仍保持原提示，评估也可通过 `--comparison-yes-no` 显式选择。
