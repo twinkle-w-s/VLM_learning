@@ -120,11 +120,11 @@ recipe/state 至少保存：round、来源/桶份额、seed、EMA acc/NLL、目�
 ## MMStar：通用视觉能力退化检查
 
 - 数据：官方 `Lin-Chen/MMStar`，HF 配置/划分叫 val，共 1,500 条、6 个核心能力，每类 250 条。这里视为外部保留评估集，名字 val 不代表可拿来训练或调配方。
-- 第一版只跑 base 和锁定后的最终 R2 全量；不把 MMStar 得分送入控制器、不用它决定 checkpoint、配比或阈值。若以后需要据此选模型，另划 development 和 untouched test 并明确报告。
-- 复用 `evaluate.py` 的 Qwen+PEFT 加载和推理；固定选择题 prompt，要求只输出选项字母，temperature=0/do_sample=False、短输出；按选项答案 exact match 计分。参考 VLMEvalKit 的 MMStar 数据/提示和解析，但首版不增加整套框架或外部 LLM judge。
+- 已实现 base 与 R1/锁定 adapter 的全量对比；R1 是中间观察，不把 MMStar 得分送入控制器。若以后据此调参或选模型，应另留未使用的最终评估并明确报告。
+- 使用 `prepare_mmstar`、`evaluate_mmstar`、`compare_mmstar` 三个入口，沿用 Swift 的 Qwen/LoRA 加载方式。固定选项字母提示、temperature=0、短输出；不增加整套评估框架或外部 LLM judge。文件职责、数据准备和完整命令见 [MMSTAR_EVALUATION.md](MMSTAR_EVALUATION.md)。
 - 保存总体、6 类准确率和逐样本 base/final 对齐结果，报告 `delta=final-base`（百分点）、正确→错误/错误→正确计数、无法解析/推理失败数。无法解析计错误、不从分母删除；多选项或歧义不让 judge 猜。
 - MMStar 只覆盖部分通用视觉能力，不能证明所有能力或文字能力都保持；文字 replay 固定留出约 100 条控制集，只记录 answer NLL 变化，不扩展新 benchmark。
-- 对入选 replay 与 MMStar 能得到的图像/文本做精确重叠检查，有重叠从训练候选移除、保留 benchmark。只声明本项目 exact 去污染，不保证 Qwen 预训练或近重复零污染。
+- 当前尚未回溯检查入选 replay 与 MMStar 的精确/近重复重叠，不宣称已去污染；后续未训练的实验再做检查和候选移除，不修改已训练数据。
 - 调参完成后看见 MMStar 下降，只报告退化和下一版研究方向；不能反复据此重训又把同一分数称为无污染最终结果。
 
 ## 多卡策略

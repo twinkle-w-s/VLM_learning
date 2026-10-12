@@ -205,7 +205,8 @@ learning/through_round01/
 
 val 评估继续独立运行：`evaluate_clevr --subset val` 和 `evaluate_nll --subset val`。
 它们用于后续反馈控制，不能替换这里的训练 probe，也不能把 val 错题加入训练。
-本次不实现 EMA/配比控制器、下一轮配方物化、R2 训练入口或 MMStar；这些是下一阶段。
+学习动态本身不实现 EMA/配比控制器、下一轮配方物化或 R2 训练入口。
+MMStar 现已有独立评估入口，见 [MMSTAR_EVALUATION.md](MMSTAR_EVALUATION.md)，不混入训练 probe 历史。
 
 ## 6. 验收范围
 
