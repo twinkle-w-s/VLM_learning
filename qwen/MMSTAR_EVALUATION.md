@@ -49,6 +49,9 @@ VLMEvalKit，不升级既有环境依赖。默认无 `--execute` 时只预览，
 
 成功状态为 `MMSTAR_READY`。已有完整数据就复用，不重复准备；导出中断的目录保留，
 需要时用 `--data-root` 指定新目录，并在后续评估中使用相同目录。
+如果只在首条图片处理时失败而留下空 images 目录，可以直接重试；脚本兼容原始
+Parquet 的 bytes 图片和含 bytes 的字典。已有 raw/mmstar.parquet 时离线读取，
+不重新下载；非空图片目录或已有 manifest/report 仍拒绝覆盖。
 官方下载地址也可用于核对：[固定版本 mmstar.parquet](https://huggingface.co/datasets/Lin-Chen/MMStar/resolve/bc98d668301da7b14f648724866e57302778ab27/mmstar.parquet)。
 
 ## 2. 配置及短测

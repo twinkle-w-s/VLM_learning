@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import yaml
 from PIL import Image
@@ -141,6 +141,47 @@ class MMStarTests(unittest.TestCase):
             self.assertNotIn("messages", manifest[0])
             with self.assertRaises(FileExistsError):
                 prepare_mmstar.export_rows(rows, root, expected_rows=3)
+
+    def test_export_accepts_direct_parquet_image_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = self.raw_rows()
+            for row in rows:
+                row["image"] = row["image"]["bytes"]
+            report = prepare_mmstar.export_rows(rows, root, expected_rows=3)
+            self.assertEqual(report["rows"], 3)
+            self.assertEqual((root / "images" / "0000.png").read_bytes(), rows[0]["image"])
+
+    def test_empty_export_directory_can_be_reused_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "images").mkdir()
+            self.assertIn("PREVIEW ONLY", invoke(prepare_mmstar, ["--data-root", str(root)]))
+            report = prepare_mmstar.export_rows(self.raw_rows(), root, expected_rows=3)
+            self.assertEqual(report["rows"], 3)
+
+    def test_existing_raw_parquet_is_used_without_redownload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "images").mkdir()
+            (root / "raw").mkdir()
+            parquet = root / "raw" / "mmstar.parquet"
+            parquet.write_bytes(b"synthetic placeholder; reader mocked")
+            rows = self.raw_rows()
+            fake_reader = SimpleNamespace(
+                schema_arrow=SimpleNamespace(names=list(rows[0])),
+                read=lambda: SimpleNamespace(to_pylist=lambda: rows),
+            )
+            fake_pq = SimpleNamespace(ParquetFile=lambda path: fake_reader)
+            fake_download = Mock(side_effect=AssertionError("不得重新下载"))
+            with patch.dict(sys.modules, {
+                "pyarrow": SimpleNamespace(parquet=fake_pq), "pyarrow.parquet": fake_pq,
+                "huggingface_hub": SimpleNamespace(hf_hub_download=fake_download),
+            }), patch.object(prepare_mmstar, "export_rows", return_value={"status": "MMSTAR_READY"}) as export:
+                printed = invoke(prepare_mmstar, ["--data-root", str(root), "--execute"])
+            self.assertIn("LOCAL PARQUET", printed)
+            fake_download.assert_not_called()
+            self.assertEqual(export.call_args[0], (rows, root))
 
     def test_bad_image_or_duplicate_index_never_creates_ready_report(self):
         for mutation in ("image", "duplicate", "count"):

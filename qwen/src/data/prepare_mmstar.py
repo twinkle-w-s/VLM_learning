@@ -21,12 +21,23 @@ from qwen.src.evaluation.mmstar_metrics import DATASET, EXPECTED_ROWS, FILENAME,
 DEFAULT_DATA_ROOT = "/data/${USER}/vlm_learning/benchmarks/mmstar"
 
 
+def check_export_target(root: Path):
+    images = root / "images"
+    if (
+        any((root / name).exists() for name in ("manifest.jsonl", "report.json"))
+        or (images.exists() and (not images.is_dir() or any(images.iterdir())))
+    ):
+        raise FileExistsError(f"保留已有 MMStar 数据，拒绝覆盖：{root}")
+    return images
+
+
 def export_rows(raw_rows, root: Path, expected_rows: int = EXPECTED_ROWS):
     if len(raw_rows) != expected_rows:
         raise ValueError(f"MMStar 行数不一致：{len(raw_rows)}/{expected_rows}")
     ids, records = set(), []
-    images = root / "images"
-    images.mkdir(parents=True, exist_ok=False)
+    images = check_export_target(root)
+    # 首条图片读取失败会留下空目录；复用空目录，不覆盖已导出的图片。
+    images.mkdir(parents=True, exist_ok=True)
     for raw in sorted(raw_rows, key=lambda row: row["index"]):
         index, answer = raw["index"], raw["answer"]
         if type(index) is not int or index < 0 or index in ids:
@@ -36,9 +47,11 @@ def export_rows(raw_rows, root: Path, expected_rows: int = EXPECTED_ROWS):
             raise ValueError(f"MMStar 题目或答案非法：{index}")
         if not raw["category"] or not raw["l2_category"]:
             raise ValueError(f"MMStar 能力标签缺失：{index}")
-        blob = raw["image"]["bytes"]
-        if not blob:
-            raise ValueError(f"MMStar 缺少内嵌图片：{index}")
+        blob = raw["image"]
+        if isinstance(blob, dict):
+            blob = blob.get("bytes")
+        if not isinstance(blob, (bytes, bytearray)) or not blob:
+            raise ValueError(f"MMStar 图片必须是原始 bytes 或含 bytes 字段的字典：{index}")
         with Image.open(io.BytesIO(blob)) as image:
             image.load()
             suffix = image.format.lower()
@@ -73,8 +86,7 @@ def main():
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     root = resolve_path(args.data_root, "data_root")
-    if any((root / name).exists() for name in ("images", "manifest.jsonl", "report.json")):
-        raise FileExistsError(f"保留已有 MMStar 数据，拒绝覆盖：{root}")
+    check_export_target(root)
     print(json.dumps({
         "dataset": DATASET, "revision": REVISION, "file": FILENAME,
         "expected_rows": EXPECTED_ROWS, "download_size_mb_approx": 41.8, "data_root": str(root),
@@ -84,12 +96,16 @@ def main():
         return
 
     import pyarrow.parquet as pq
-    from huggingface_hub import hf_hub_download
+    path = root / "raw" / FILENAME
+    if path.is_file() and path.stat().st_size > 0:
+        print("LOCAL PARQUET：复用已下载文件：", path, flush=True)
+    else:
+        from huggingface_hub import hf_hub_download
 
-    path = hf_hub_download(
-        repo_id=DATASET, repo_type="dataset", filename=FILENAME, revision=REVISION,
-        local_dir=str(root / "raw"),
-    )
+        path = hf_hub_download(
+            repo_id=DATASET, repo_type="dataset", filename=FILENAME, revision=REVISION,
+            local_dir=str(root / "raw"),
+        )
     parquet = pq.ParquetFile(path)
     required = {"index", "question", "image", "answer", "category", "l2_category", "meta_info"}
     if not required.issubset(parquet.schema_arrow.names):
